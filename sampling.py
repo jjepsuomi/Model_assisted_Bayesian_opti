@@ -3,14 +3,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
-from scipy.stats import chi2
+from scipy.stats import chi2, norm
+from sklearn.model_selection import cross_val_score, train_test_split, LeaveOneOut, KFold
+import warnings
+from sklearn.exceptions import ConvergenceWarning
+# Disable ConvergenceWarnings
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
+"""
+Gaussian function.
+"""
 def gaussian(mean=0, std=1, input_x=0):
     gaussian_value = np.exp(-(input_x - mean)**2 / (2 * std**2))
     return gaussian_value
 
+"""
+The true function f(x)=y.
+"""
 def true_function(input_x=0):
-    #true_function_values = input_x * np.sin(input_x) + gaussian(5.7, 1, 5, input_x) - gaussian(-8, 2, 40, input_x) - gaussian(8, 0.8, 3, input_x) - gaussian(-4, 1.4, 10, input_x)
     true_function_values = 0.1*input_x + input_x * np.sin(input_x) \
     + gaussian(5.7, 1, input_x) \
     - 2*gaussian(-8, 2, input_x) \
@@ -25,35 +35,91 @@ def true_function(input_x=0):
     + 2*gaussian(-18,1,input_x) \
     - 0.5*gaussian(-15,1,input_x) \
     + np.cos(input_x*2)
-
     return true_function_values
 
-
-def get_random_sample_from_true_function(xmin=-10, xmax=10, num_samples=1):
+"""
+Generate a sample from the true function with added Gaussian noise.
+"""
+def get_random_sample_from_true_function(xmin=-10, xmax=10, num_samples=1, noise_std=0.00001):
     random_x = np.random.uniform(xmin, xmax, num_samples)
+    sample_sort_indices = np.argsort(random_x, axis=0) # Sort the x into ascending order (makes plotting nicer)
+    random_x = random_x[sample_sort_indices]
     random_y = true_function(random_x)
-    random_y_with_noise = random_y + np.random.normal(0, 0.00001, size=(num_samples,))
-    print(random_y[0:3], random_y_with_noise[0:3])
-    
-    #np.random.normal(0, 0.001, size=(num_samples,))
-    #random_y = true_function(random_x) 
-    return random_x, random_y_with_noise
+    random_y_with_noise = random_y + np.random.normal(0, noise_std, size=(num_samples,))
+    return random_x.reshape(-1, 1), random_y_with_noise.reshape(-1, 1) # Return and make sure they are 2D-matrices with one column.
 
-def fit_gaussian_process(X_train, y_train):
-    # Define the kernel (Radial Basis Function kernel)
-    #X_train = X_train.reshape(-1, 1) # Only one feature
-    kernel = RBF(length_scale=2) + C(0.45, (1e-3, 1e3))
+"""
+Initiate an unfitted Gaussian Process Regressor model.
+"""
+def initiate_gpr_model():
+    kernel = RBF(length_scale=1) + C(0.05, (1e-3, 1e3))
     # Create the Gaussian Process Regressor model with the defined kernel
     model = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10) 
-    # Fit the model to the training data
+    return model
+
+"""
+Fit a new GPR model into given data.
+"""
+def fit_gaussian_process(X_train=None, y_train=None):
+    model = initiate_gpr_model()
     model.fit(X_train, y_train)
     return model
+
 
 def predictive_uncertainty(input_x, y_mean, y_std):
     max_std_ind = np.where(y_std == np.max(y_std))[0][0]
     return input_x[max_std_ind], y_mean[max_std_ind]
 
-# Generate the data set
+
+def evaluate_single_point_impact(x_data=None, y_data=None, nfolds=5):
+    loo = LeaveOneOut()
+    loo_ind = 1
+    point_utility_list = np.zeros(shape=(len(y_data), 1))
+    for inner_data_index, single_point_index in loo.split(x_data):
+        sample_data_x, single_point_x = x_data[inner_data_index], x_data[single_point_index]
+        sample_data_y, single_point_y = y_data[inner_data_index], y_data[single_point_index]
+        kfcv = KFold(n_splits=nfolds, shuffle=True)
+        print(f'Evaluating sample point {loo_ind}/{len(y_data)}')
+        without_point_residual, with_point_residual = 0, 0
+        for inner_train_index, inner_test_index in kfcv.split(sample_data_x):
+            train_x, test_x = sample_data_x[inner_train_index], sample_data_x[inner_test_index]
+            train_y, test_y = sample_data_y[inner_train_index], sample_data_y[inner_test_index]
+            # Vertically stack the arrays
+            train_x_with_new_point = np.vstack((train_x, single_point_x))
+            train_y_with_new_point = np.vstack((train_y, single_point_y))
+            model_without_point = initiate_gpr_model()
+            model_without_point.fit(X=train_x, y=train_y)
+            model_with_point = initiate_gpr_model()
+            model_with_point.fit(X=train_x_with_new_point, y=train_y_with_new_point)
+            predicted_y_without_point = model_without_point.predict(test_x)
+            predicted_y_with_point = model_with_point.predict(test_x)
+            without_point_residual += np.sum(np.abs(predicted_y_without_point - test_y)) / len(test_y)
+            with_point_residual += np.sum(np.abs(predicted_y_with_point - test_y)) / len(test_y)
+        without_point_residual = without_point_residual / nfolds
+        with_point_residual = with_point_residual / nfolds
+        point_utility_list[single_point_index] = with_point_residual - without_point_residual
+        if point_utility_list[single_point_index] < 0:
+            print(f'Point addition improved test error by: {point_utility_list[single_point_index]}')
+        else:
+            print(f'Point addition did not improve test error, but increased: {point_utility_list[single_point_index]}')
+        loo_ind += 1
+    return point_utility_list.reshape(-1, 1) # Return the utility values as 2D-matrix.
+            
+
+def expected_improvement(x_data, surrogate_model, f_min, epsilon=1e-6):
+    mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
+    # Calculate the standard score Z with a small epsilon to avoid division by zero.
+    Z = (f_min - mu - epsilon) / (sigma + epsilon)
+    print(Z)
+    # Calculate the Expected Improvement.
+    phi = norm.pdf(Z)
+    Phi = norm.cdf(Z)
+    ei = (f_min - mu) * Phi + sigma * phi
+    return ei
+
+
+# STEP 1 : Generate the data set and true function.
+print(f'***************************\nStarting analysis\n***************************')
 input_x_interval_min = -20
 input_x_interval_max = 20
 number_y_points_from_true_function = 100
@@ -62,36 +128,85 @@ x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from
 y = true_function(x)
 print(f'Shape of x is: {x.shape}')
 print(f'Shape of y is: {y.shape}')
+x, y = x.reshape(-1, 1), y.reshape(-1, 1)
+print(f'New shape of x is: {x.shape}')
+print(f'New shape of y is: {y.shape}')
 
-# Make sample data
-sample_x, sample_y = get_random_sample_from_true_function(-20, 20, 30)
-sample_x = sample_x.reshape(-1, 1)
-gpr_model = fit_gaussian_process(sample_x.reshape(-1,1), sample_y)
+
+# STEP 2: Create a sample from the true functrion
+sample_count = 8
+random_sample_y_noise_std = 0.0000001
+print(f'Sampling {sample_count} points from true function with noise std. level: {random_sample_y_noise_std}')
+sample_x, sample_y = get_random_sample_from_true_function(xmin=input_x_interval_min,
+                                                          xmax=input_x_interval_max, 
+                                                          num_samples=sample_count,
+                                                          noise_std=random_sample_y_noise_std)
+print(f'Random (x-sorted) sample generated with data shapes x,y: {sample_x.shape}, {sample_y.shape}')
+
+
+# STEP 3: Evaluate the impact of all data points to model test performance.
+number_of_Monte_Carlo_evaluations = 5
+print(f'Evaluating sample point utilities using {number_of_Monte_Carlo_evaluations}-fold cross-validation.')
+sample_y_utility_values = evaluate_single_point_impact(x_data=sample_x,
+                                                       y_data=sample_y,
+                                                       nfolds=number_of_Monte_Carlo_evaluations)
+
+# STEP 4: Fit GPR model to sample data and make the data to plot the GPR function fit.
+gpr_model = fit_gaussian_process(X_train=sample_x,
+                                 y_train=sample_y)
 # Next, predict the function
-predicted_y_mean, predicted_y_std = gpr_model.predict(X=x.reshape(-1,1), return_std=True)
+predicted_y_mean, predicted_y_std = gpr_model.predict(X=x, return_std=True)
+
 # Get the predictive uncertainty point
 xopt, yopt = predictive_uncertainty(x, predicted_y_mean, predicted_y_std)
 
-###########
-## Plotting
-###########
+print(f'Fitting GPR model to y-utility value.')
+utility_gpr_model = fit_gaussian_process(X_train=sample_x,
+                                         y_train=sample_y_utility_values)
 
-# Create the plot of true function
-plt.figure(figsize=(8, 6))  # Adjust the figure size if needed
-plt.plot(x, y, label='target function', color='blue', linestyle='--')  # Plot the sine function
-plt.plot(x, predicted_y_mean, label='GPR', color='green')  # Plot the sine function
-plt.fill_between(x, predicted_y_mean - 1.96*predicted_y_std, predicted_y_mean + 1.96*predicted_y_std, color='orange', alpha=0.2)
-#plt.title('Plot of the Sine Function')
-plt.xlabel('Explanatory variable value')
-plt.ylabel('Function value')
+min_utility_y = np.min(sample_y_utility_values)
+print(f'Minimum utility value is: {min_utility_y}')
+eis = expected_improvement(x, utility_gpr_model, min_utility_y, epsilon=0)
+print("eis", eis)
+# Create subplots with two columns
+fig, axs = plt.subplots(1, 3, figsize=(12, 6))
 
-plt.scatter(sample_x, sample_y, color="red", label="sample point")
+# Left subplot (existing code)
+axs[0].plot(x.ravel(), y, label='target function', color='blue', linestyle='--')
+axs[0].plot(x.ravel(), predicted_y_mean, label='GPR', color='green')
+axs[0].fill_between(x.ravel(), predicted_y_mean - 1.96*predicted_y_std, predicted_y_mean + 1.96*predicted_y_std, color='orange', alpha=0.2)
+axs[0].set_xlabel('Explanatory variable value')
+axs[0].set_ylabel('Function value')
+axs[0].scatter(sample_x, sample_y, color="red", label="sample point")
+axs[0].set_aspect('equal')
+axs[0].set_ylim(-22, 20)  # Replace these values with your desired y-range
+axs[0].grid(True)
+axs[0].legend()
 
-# Set the aspect ratio to be equal
-plt.axis('equal')
-# Set the y-range (limits)
-plt.ylim(-22, 20)  # Replace these values with your desired y-range
-#plt.xlim(-10, 10)  # Replace these values with your desired y-range
-plt.grid(True)
-plt.legend()
+# Right subplot (simple sinusoid function)
+#axs[1].plot(sample_x, y_utility, label='utility', color='blue')
+axs[1].plot(x.ravel(), y, label='target function', color='blue', linestyle='--')
+axs[1].plot(sample_x, sample_y_utility_values, label='function', color='red', linestyle='--')
+print(sample_x)
+axs[1].scatter(sample_x, sample_y_utility_values, color="violet", label="sample point")
+axs[1].set_xlabel('X')
+axs[1].set_ylabel('Y')
+axs[1].set_title('Simple Sinusoid Function')
+axs[1].grid(True)
+axs[1].set_aspect('equal')
+axs[1].legend()
+
+# Left subplot (existing code)
+axs[2].plot(x.ravel(), eis, label='target function', color='blue', linestyle='-')
+axs[2].set_xlabel('Explanatory variable value')
+axs[2].set_ylabel('Function value')
+#axs[2].set_aspect('equal')
+#axs[2].set_ylim(-1, 1)  # Replace these values with your desired y-range
+axs[2].grid(True)
+axs[2].legend()
+
+# Adjust the layout to prevent overlapping labels
+#plt.tight_layout()
+
+# Show the subplots
 plt.show()
