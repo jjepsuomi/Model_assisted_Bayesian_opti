@@ -7,6 +7,7 @@ from scipy.stats import chi2, norm
 from sklearn.model_selection import cross_val_score, train_test_split, LeaveOneOut, KFold
 import warnings
 from sklearn.exceptions import ConvergenceWarning
+import copy
 # Disable ConvergenceWarnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
@@ -66,11 +67,9 @@ def fit_gaussian_process(X_train=None, y_train=None):
     return model
 
 
-def predictive_uncertainty(input_x, y_mean, y_std):
-    max_std_ind = np.where(y_std == np.max(y_std))[0][0]
-    return input_x[max_std_ind], y_mean[max_std_ind]
-
-
+"""
+Evaluate sample point utilities.
+"""
 def evaluate_single_point_impact(x_data=None, y_data=None, nfolds=5):
     loo = LeaveOneOut()
     loo_ind = 1
@@ -110,12 +109,49 @@ def expected_improvement(x_data, surrogate_model, f_min, epsilon=1e-6):
     mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
     # Calculate the standard score Z with a small epsilon to avoid division by zero.
     Z = (f_min - mu - epsilon) / (sigma + epsilon)
-    print(Z)
     # Calculate the Expected Improvement.
     phi = norm.pdf(Z)
     Phi = norm.cdf(Z)
     ei = (f_min - mu) * Phi + sigma * phi
     return ei
+
+def scaled_expected_improvement(x_data, surrogate_model, f_min, epsilon=1e-6):
+    mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
+    # Calculate the standard score Z with a small epsilon to avoid division by zero.
+    Z = (f_min - mu - epsilon) / (sigma + epsilon)
+    # Calculate the Expected Improvement.
+    phi = norm.pdf(Z)
+    Phi = norm.cdf(Z)
+    ei = (f_min - mu) * Phi + sigma * phi
+    # Next EI variance
+    ei2 = np.power(ei, 2)
+    Z2 = np.power(Z, 2)
+    sigma2 = np.power(sigma, 2)
+    ei_std = np.sqrt(sigma2 * ((Z2 + 1)*Phi + Z*phi) - ei2)
+    ei_std[ei_std == 0] = 0.00000001
+    sei = ei / ei_std
+    sei[sei == 0] = 0.00000001
+    return sei
+
+def predictive_uncertainty(x_data, y_mean, y_std):
+    max_std_ind = np.where(y_std == np.max(y_std))[0][0]
+    return x_data[max_std_ind], y_mean[max_std_ind]
+
+def inverted_lower_confidence_bound(y_mean=0, y_std=0, l=0.2):
+    return l*y_std - y_mean
+
+"""
+Minmax-normalization.
+"""
+def acquisition_to_inclusion_probs(acquisition_values=None):
+    divisor = np.max(acquisition_values) - np.min(acquisition_values)
+    normalized_acquisition_values = (acquisition_values - np.min(acquisition_values)) / divisor
+    unique_acquisition_values = np.unique(normalized_acquisition_values)
+    min_prob = unique_acquisition_values[0] + (unique_acquisition_values[1] - unique_acquisition_values[0]) / 2
+    max_prob = unique_acquisition_values[-2] + (unique_acquisition_values[-1] - unique_acquisition_values[-2]) / 2
+    normalized_acquisition_values[normalized_acquisition_values == 1] = max_prob
+    normalized_acquisition_values[normalized_acquisition_values == 0] = min_prob
+    return normalized_acquisition_values
 
 
 # STEP 1 : Generate the data set and true function.
@@ -134,7 +170,7 @@ print(f'New shape of y is: {y.shape}')
 
 
 # STEP 2: Create a sample from the true functrion
-sample_count = 8
+sample_count = 15
 random_sample_y_noise_std = 0.0000001
 print(f'Sampling {sample_count} points from true function with noise std. level: {random_sample_y_noise_std}')
 sample_x, sample_y = get_random_sample_from_true_function(xmin=input_x_interval_min,
@@ -157,17 +193,33 @@ gpr_model = fit_gaussian_process(X_train=sample_x,
 # Next, predict the function
 predicted_y_mean, predicted_y_std = gpr_model.predict(X=x, return_std=True)
 
-# Get the predictive uncertainty point
-xopt, yopt = predictive_uncertainty(x, predicted_y_mean, predicted_y_std)
-
 print(f'Fitting GPR model to y-utility value.')
 utility_gpr_model = fit_gaussian_process(X_train=sample_x,
                                          y_train=sample_y_utility_values)
 
+
+# Get the predictive uncertainty point
+xopt, yopt = predictive_uncertainty(x, predicted_y_mean, predicted_y_std)
+pu = acquisition_to_inclusion_probs(predicted_y_std)
+
+# Expected improvement
 min_utility_y = np.min(sample_y_utility_values)
 print(f'Minimum utility value is: {min_utility_y}')
 eis = expected_improvement(x, utility_gpr_model, min_utility_y, epsilon=0)
-print("eis", eis)
+neis = acquisition_to_inclusion_probs(eis)
+
+seis = scaled_expected_improvement(x, utility_gpr_model, min_utility_y, epsilon=0)
+nseis = acquisition_to_inclusion_probs(seis)
+
+# Lower confidence bound
+ilcb01 = inverted_lower_confidence_bound(y_mean=predicted_y_mean, y_std=predicted_y_std, l=0.1)
+ilcb01p = acquisition_to_inclusion_probs(ilcb01)
+ilcb05 = inverted_lower_confidence_bound(y_mean=predicted_y_mean, y_std=predicted_y_std, l=0.5)
+ilcb05p = acquisition_to_inclusion_probs(ilcb05)
+ilcb09 = inverted_lower_confidence_bound(y_mean=predicted_y_mean, y_std=predicted_y_std, l=0.9)
+ilcb09p = acquisition_to_inclusion_probs(ilcb09)
+
+"""
 # Create subplots with two columns
 fig, axs = plt.subplots(1, 3, figsize=(12, 6))
 
@@ -209,4 +261,46 @@ axs[2].legend()
 #plt.tight_layout()
 
 # Show the subplots
+plt.show()
+"""
+# Create a figure for the first plot
+fig1 = plt.figure(figsize=(6, 6))
+plt.plot(x.ravel(), y, label='target function', color='blue', linestyle='--')
+plt.plot(x.ravel(), predicted_y_mean, label='GPR fit', color='green')
+plt.fill_between(x.ravel(), predicted_y_mean - 1.96*predicted_y_std, predicted_y_mean + 1.96*predicted_y_std, color='orange', alpha=0.2)
+plt.xlabel('Explanatory variable value')
+plt.ylabel('Function value')
+plt.scatter(sample_x, sample_y, color="red", label="sample point")
+plt.gca().set_aspect('equal')
+plt.ylim(-22, 20)  # Replace these values with your desired y-range
+plt.grid(True)
+plt.title('Target function and GPR fit')
+plt.legend()
+
+# Create a figure for the second plot
+fig2 = plt.figure(figsize=(6, 6))
+plt.plot(x.ravel(), y, label='target function', color='blue', linestyle='--')
+plt.plot(sample_x, sample_y_utility_values, label='utility function', color='violet', linestyle='-')
+plt.scatter(sample_x, sample_y_utility_values, color="red", label="utility sample point")
+plt.xlabel('Explanatory variable value')
+plt.ylabel('Function value')
+plt.title('Target and sample utility function.')
+plt.grid(True)
+plt.gca().set_aspect('equal')
+plt.legend()
+
+# Create a figure for the third plot
+fig3 = plt.figure(figsize=(6, 6))
+plt.plot(x.ravel(), pu, label='PU', color='blue', linestyle='--')
+plt.plot(x.ravel(), neis, label='EI', color='green', linestyle='--')
+plt.plot(x.ravel(), nseis, label='SEI', color='black', linestyle='--')
+plt.plot(x.ravel(), ilcb01p, label='ILCB10', color='pink', linestyle='--')
+plt.plot(x.ravel(), ilcb05p, label='ILCB50', color='violet', linestyle='--')
+plt.plot(x.ravel(), ilcb09p, label='ILCB90', color='red', linestyle='--')
+plt.xlabel('Explanatory variable value')
+plt.ylabel('Function value')
+plt.grid(True)
+plt.legend()
+
+# Show the figures
 plt.show()
