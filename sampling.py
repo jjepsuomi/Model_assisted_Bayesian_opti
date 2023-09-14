@@ -105,20 +105,22 @@ def evaluate_single_point_impact(x_data=None, y_data=None, nfolds=5):
     return point_utility_list.reshape(-1, 1) # Return the utility values as 2D-matrix.
             
 
-def expected_improvement(x_data, surrogate_model, f_min, epsilon=1e-6):
+def expected_improvement(x_data, surrogate_model, f_min, var_epsilon=1e-10):
     mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
     # Calculate the standard score Z with a small epsilon to avoid division by zero.
-    Z = (f_min - mu - epsilon) / (sigma + epsilon)
+    sigma[sigma == 0] = var_epsilon # In places where sigma is 0, set sigma to small value to prevent division by zero.
+    Z = (f_min - mu) / sigma
     # Calculate the Expected Improvement.
     phi = norm.pdf(Z)
     Phi = norm.cdf(Z)
     ei = (f_min - mu) * Phi + sigma * phi
     return ei
 
-def scaled_expected_improvement(x_data, surrogate_model, f_min, epsilon=1e-6):
+def scaled_expected_improvement(x_data, surrogate_model, f_min, var_epsilon=1e-10):
     mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
     # Calculate the standard score Z with a small epsilon to avoid division by zero.
-    Z = (f_min - mu - epsilon) / (sigma + epsilon)
+    sigma[sigma == 0] = var_epsilon # In places where sigma is 0, set sigma to small value to prevent division by zero.
+    Z = (f_min - mu) / sigma
     # Calculate the Expected Improvement.
     phi = norm.pdf(Z)
     Phi = norm.cdf(Z)
@@ -128,9 +130,8 @@ def scaled_expected_improvement(x_data, surrogate_model, f_min, epsilon=1e-6):
     Z2 = np.power(Z, 2)
     sigma2 = np.power(sigma, 2)
     ei_std = np.sqrt(sigma2 * ((Z2 + 1)*Phi + Z*phi) - ei2)
-    ei_std[ei_std == 0] = 0.00000001
+    ei_std[ei_std == 0] = var_epsilon
     sei = ei / ei_std
-    sei[sei == 0] = 0.00000001
     return sei
 
 def predictive_uncertainty(x_data, y_mean, y_std):
@@ -144,13 +145,25 @@ def inverted_lower_confidence_bound(y_mean=0, y_std=0, l=0.2):
 Minmax-normalization.
 """
 def acquisition_to_inclusion_probs(acquisition_values=None):
-    divisor = np.max(acquisition_values) - np.min(acquisition_values)
-    normalized_acquisition_values = (acquisition_values - np.min(acquisition_values)) / divisor
-    unique_acquisition_values = np.unique(normalized_acquisition_values)
-    min_prob = unique_acquisition_values[0] + (unique_acquisition_values[1] - unique_acquisition_values[0]) / 2
-    max_prob = unique_acquisition_values[-2] + (unique_acquisition_values[-1] - unique_acquisition_values[-2]) / 2
-    normalized_acquisition_values[normalized_acquisition_values == 1] = max_prob
-    normalized_acquisition_values[normalized_acquisition_values == 0] = min_prob
+    max_acquisition_value = np.max(acquisition_values)
+    min_acquisition_value = np.min(acquisition_values)
+    divisor = max_acquisition_value - min_acquisition_value
+    normalized_acquisition_values = None
+    if divisor == 0: # If this happens, all acquisition values are same. In this case use random sampling with same prob. 1/N
+        print(f'The maximum and minimum  acquisition values are equal, setting inc.probs to: {1.0/acquisition_values.size}')
+        normalized_acquisition_values = np.full(shape=acquisition_values.shape, fill_value=1.0/acquisition_values.size)
+    else: # divisor > 0
+        normalized_acquisition_values = (acquisition_values - min_acquisition_value) / divisor # p € [0, 1]
+        unique_acquisition_values = np.unique(normalized_acquisition_values)
+        if unique_acquisition_values.size > 2:
+            min_prob = unique_acquisition_values[0] + (unique_acquisition_values[1] - unique_acquisition_values[0]) / 2
+            max_prob = unique_acquisition_values[-2] + (unique_acquisition_values[-1] - unique_acquisition_values[-2]) / 2
+            normalized_acquisition_values[normalized_acquisition_values == 1] = max_prob
+            normalized_acquisition_values[normalized_acquisition_values == 0] = min_prob # p € (0, 1)
+        else: # This means there must be two unique values
+            print(f'There are only two unique acquisition values, setting to 0.2 and 0.8.')
+            normalized_acquisition_values[normalized_acquisition_values == 1] = 0.8
+            normalized_acquisition_values[normalized_acquisition_values == 0] = 0.2 # p € (0, 1)
     return normalized_acquisition_values
 
 
@@ -170,7 +183,7 @@ print(f'New shape of y is: {y.shape}')
 
 
 # STEP 2: Create a sample from the true functrion
-sample_count = 15
+sample_count = 8
 random_sample_y_noise_std = 0.0000001
 print(f'Sampling {sample_count} points from true function with noise std. level: {random_sample_y_noise_std}')
 sample_x, sample_y = get_random_sample_from_true_function(xmin=input_x_interval_min,
@@ -200,15 +213,15 @@ utility_gpr_model = fit_gaussian_process(X_train=sample_x,
 
 # Get the predictive uncertainty point
 xopt, yopt = predictive_uncertainty(x, predicted_y_mean, predicted_y_std)
-pu = acquisition_to_inclusion_probs(predicted_y_std)
+pu_ip = acquisition_to_inclusion_probs(predicted_y_std)
 
 # Expected improvement
 min_utility_y = np.min(sample_y_utility_values)
 print(f'Minimum utility value is: {min_utility_y}')
-eis = expected_improvement(x, utility_gpr_model, min_utility_y, epsilon=0)
+eis = expected_improvement(x, utility_gpr_model, min_utility_y, var_epsilon=1e-10)
 neis = acquisition_to_inclusion_probs(eis)
 
-seis = scaled_expected_improvement(x, utility_gpr_model, min_utility_y, epsilon=0)
+seis = scaled_expected_improvement(x, utility_gpr_model, min_utility_y, var_epsilon=1e-10)
 nseis = acquisition_to_inclusion_probs(seis)
 
 # Lower confidence bound
@@ -290,17 +303,26 @@ plt.gca().set_aspect('equal')
 plt.legend()
 
 # Create a figure for the third plot
-fig3 = plt.figure(figsize=(6, 6))
-plt.plot(x.ravel(), pu, label='PU', color='blue', linestyle='--')
-plt.plot(x.ravel(), neis, label='EI', color='green', linestyle='--')
-plt.plot(x.ravel(), nseis, label='SEI', color='black', linestyle='--')
-plt.plot(x.ravel(), ilcb01p, label='ILCB10', color='pink', linestyle='--')
-plt.plot(x.ravel(), ilcb05p, label='ILCB50', color='violet', linestyle='--')
-plt.plot(x.ravel(), ilcb09p, label='ILCB90', color='red', linestyle='--')
+# Create a figure for PU
+fig_pu = plt.figure(figsize=(6, 6))
+plt.plot(x.ravel(), pu_ip, label='PU', color='blue', linestyle='--')
+plt.plot(x.ravel(), ilcb05p, label='ILCB', color='red', linestyle='-', linewidth=1)
 plt.xlabel('Explanatory variable value')
 plt.ylabel('Function value')
 plt.grid(True)
 plt.legend()
+
+# Create a figure for SEI
+fig_sei = plt.figure(figsize=(6, 6))
+
+plt.plot(x.ravel(), neis, label='EI', color='orange', linestyle='-')
+plt.plot(x.ravel(), nseis, label='SEI', color='green', linestyle='--')
+plt.xlabel('Explanatory variable value')
+plt.ylabel('Function value')
+plt.grid(True)
+plt.legend()
+
+
 
 # Show the figures
 plt.show()
