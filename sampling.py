@@ -2,14 +2,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel, Matern
 from scipy.stats import chi2, norm
 from sklearn.model_selection import cross_val_score, train_test_split, LeaveOneOut, KFold
 import warnings
+from sklearn.preprocessing import StandardScaler
 from sklearn.exceptions import ConvergenceWarning
 import copy
+from sklearn.model_selection import GridSearchCV
 # Disable ConvergenceWarnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
+
+
+
+
 
 """
 Gaussian function.
@@ -45,8 +51,10 @@ def get_random_sample_from_true_function(xmin=-10, xmax=10, num_samples=1, noise
     random_x = np.random.uniform(xmin, xmax, num_samples)
     sample_sort_indices = np.argsort(random_x, axis=0) # Sort the x into ascending order (makes plotting nicer)
     random_x = random_x[sample_sort_indices]
+    # set x manually
+    random_x = np.array([-19, -13, -10, -2.6, 1, 3, 8, 12, 15, 18])
     random_y = true_function(random_x)
-    random_y_with_noise = random_y + np.random.normal(0, noise_std, size=(num_samples,))
+    random_y_with_noise = random_y + np.random.normal(0, noise_std, size=(random_x.size,))
     return random_x.reshape(-1, 1), random_y_with_noise.reshape(-1, 1) # Return and make sure they are 2D-matrices with one column.
 
 """
@@ -54,8 +62,9 @@ Initiate an unfitted Gaussian Process Regressor model.
 """
 def initiate_gpr_model():
     kernel = RBF(length_scale=1) + C(0.05, (1e-3, 1e3))
+    #kernel = RBF(length_scale=1) + WhiteKernel(noise_level=0.00001)
     # Create the Gaussian Process Regressor model with the defined kernel
-    model = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10) 
+    model = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=20) 
     return model
 
 """
@@ -63,6 +72,14 @@ Fit a new GPR model into given data.
 """
 def fit_gaussian_process(X_train=None, y_train=None):
     model = initiate_gpr_model()
+    #param_grid = {
+    #'kernel': [1.0 * RBF(length_scale=1.0), 1.0 * Matern(length_scale=1.0)],
+    #'alpha': [1e-4, 1e-3, 1e-2]
+    #}
+    #gpr = GaussianProcessRegressor()
+    #grid_search = GridSearchCV(gpr, param_grid, cv=5)
+    #grid_search.fit(X_train, y_train)
+    #model = grid_search.best_estimator_
     model.fit(X_train, y_train)
     return model
 
@@ -232,63 +249,20 @@ ilcb05p = acquisition_to_inclusion_probs(ilcb05)
 ilcb09 = inverted_lower_confidence_bound(y_mean=predicted_y_mean, y_std=predicted_y_std, l=0.9)
 ilcb09p = acquisition_to_inclusion_probs(ilcb09)
 
-"""
-# Create subplots with two columns
-fig, axs = plt.subplots(1, 3, figsize=(12, 6))
-
-# Left subplot (existing code)
-axs[0].plot(x.ravel(), y, label='target function', color='blue', linestyle='--')
-axs[0].plot(x.ravel(), predicted_y_mean, label='GPR', color='green')
-axs[0].fill_between(x.ravel(), predicted_y_mean - 1.96*predicted_y_std, predicted_y_mean + 1.96*predicted_y_std, color='orange', alpha=0.2)
-axs[0].set_xlabel('Explanatory variable value')
-axs[0].set_ylabel('Function value')
-axs[0].scatter(sample_x, sample_y, color="red", label="sample point")
-axs[0].set_aspect('equal')
-axs[0].set_ylim(-22, 20)  # Replace these values with your desired y-range
-axs[0].grid(True)
-axs[0].legend()
-
-# Right subplot (simple sinusoid function)
-#axs[1].plot(sample_x, y_utility, label='utility', color='blue')
-axs[1].plot(x.ravel(), y, label='target function', color='blue', linestyle='--')
-axs[1].plot(sample_x, sample_y_utility_values, label='function', color='red', linestyle='--')
-print(sample_x)
-axs[1].scatter(sample_x, sample_y_utility_values, color="violet", label="sample point")
-axs[1].set_xlabel('X')
-axs[1].set_ylabel('Y')
-axs[1].set_title('Simple Sinusoid Function')
-axs[1].grid(True)
-axs[1].set_aspect('equal')
-axs[1].legend()
-
-# Left subplot (existing code)
-axs[2].plot(x.ravel(), eis, label='target function', color='blue', linestyle='-')
-axs[2].set_xlabel('Explanatory variable value')
-axs[2].set_ylabel('Function value')
-#axs[2].set_aspect('equal')
-#axs[2].set_ylim(-1, 1)  # Replace these values with your desired y-range
-axs[2].grid(True)
-axs[2].legend()
-
-# Adjust the layout to prevent overlapping labels
-#plt.tight_layout()
-
-# Show the subplots
-plt.show()
-"""
 # Create a figure for the first plot
 fig1 = plt.figure(figsize=(6, 6))
 plt.plot(x.ravel(), y, label='target function', color='blue', linestyle='--')
 plt.plot(x.ravel(), predicted_y_mean, label='GPR fit', color='green')
-plt.fill_between(x.ravel(), predicted_y_mean - 1.96*predicted_y_std, predicted_y_mean + 1.96*predicted_y_std, color='orange', alpha=0.2)
+plt.fill_between(x.ravel(), predicted_y_mean - 1.96*predicted_y_std, predicted_y_mean + 1.96*predicted_y_std, color='orange', alpha=0.2, label='95% confidence interval')
 plt.xlabel('Explanatory variable value')
 plt.ylabel('Function value')
 plt.scatter(sample_x, sample_y, color="red", label="sample point")
-plt.gca().set_aspect('equal')
+#plt.gca().set_aspect('equal')
 plt.ylim(-22, 20)  # Replace these values with your desired y-range
 plt.grid(True)
-plt.title('Target function and GPR fit')
+plt.title('Target function and GPR fit to sample points')
 plt.legend()
+plt.tight_layout()  # Automatically adjusts spacing
 
 # Create a figure for the second plot
 fig2 = plt.figure(figsize=(6, 6))
@@ -297,10 +271,11 @@ plt.plot(sample_x, sample_y_utility_values, label='utility function', color='vio
 plt.scatter(sample_x, sample_y_utility_values, color="red", label="utility sample point")
 plt.xlabel('Explanatory variable value')
 plt.ylabel('Function value')
-plt.title('Target and sample utility function.')
+plt.title('Target and sample utility function')
 plt.grid(True)
-plt.gca().set_aspect('equal')
+#plt.gca().set_aspect('equal')
 plt.legend()
+plt.tight_layout()  # Automatically adjusts spacing
 
 # Create a figure for the third plot
 # Create a figure for PU
@@ -309,20 +284,21 @@ plt.plot(x.ravel(), pu_ip, label='PU', color='blue', linestyle='--')
 plt.plot(x.ravel(), ilcb05p, label='ILCB', color='red', linestyle='-', linewidth=1)
 plt.xlabel('Explanatory variable value')
 plt.ylabel('Function value')
+plt.title('PU and ILCB acquisition functions')
 plt.grid(True)
 plt.legend()
+plt.tight_layout()  # Automatically adjusts spacing
 
 # Create a figure for SEI
 fig_sei = plt.figure(figsize=(6, 6))
-
 plt.plot(x.ravel(), neis, label='EI', color='orange', linestyle='-')
 plt.plot(x.ravel(), nseis, label='SEI', color='green', linestyle='--')
 plt.xlabel('Explanatory variable value')
 plt.ylabel('Function value')
+plt.title('EI and SEI acquisition functions')
 plt.grid(True)
 plt.legend()
-
-
+plt.tight_layout()  # Automatically adjusts spacing
 
 # Show the figures
 plt.show()
