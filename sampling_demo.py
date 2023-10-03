@@ -3,6 +3,7 @@ import bosampler
 import importlib
 importlib.reload(bosampler)
 from bosampler import BOsampler
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel, Matern
 """
 Gaussian function.
 """
@@ -35,7 +36,7 @@ def true_function(input_x=0):
 print(f'***************************\nStarting analysis\n***************************')
 input_x_interval_min = -20
 input_x_interval_max = 20
-number_y_points_from_true_function = 100
+number_y_points_from_true_function = 20
 print(f'Generating true function {number_y_points_from_true_function} points from x-interval: [{input_x_interval_min}, {input_x_interval_max}]')
 x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from_true_function)
 y = true_function(x)
@@ -45,13 +46,46 @@ x, y = x.reshape(-1, 1), y.reshape(-1, 1)
 print(f'New shape of x is: {x.shape}')
 print(f'New shape of y is: {y.shape}')
 
-y_noise = {
-    'mean' : 0,
-    'std'  : 1e-5    
+# Define a list of length scale values to search over for RBF and Matern kernels
+length_scales = [0.5, 1.0, 1.5]
+
+
+# Define the hyperparameter grid
+param_grid = {
+    'kernel': [RBF(length_scale=2.0) for l in np.arange(0.1, 3.1, 0.1)],
+    'alpha': [np.power(10.0, -x) for x in np.arange(1, 6, 1)],
+    'n_restarts_optimizer': [n_restarts for n_restarts in np.arange(1, 11, 1)],
 }
-bo_sampler = BOsampler(hyperparam_grid=None,
+print(param_grid['alpha'])
+"""
+hyperparam_grid=None,
+                 X=None,
+                 y=None,
+                 y_noise_params=None,
+                 normalize_data=True,
+                 cv_folds=5,
+                 sample_size=5):
+"""
+noise_parameters = {'mean' : 0, 'std' : 1e-5}
+bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        X=x,
                        y=y,
-                       y_noise_params=y_noise)
+                       y_noise_params=noise_parameters,
+                       normalize_data=True,
+                       cv_folds=5,
+                       sample_size=20)
+bo_sampler.sample_optimize_gpr_model()
 
 
+# STEPS TO DO
+"""
+1. Get the data
+2. Normalize the features
+3. Produce model based on the data given to the procedure. 
+4. Produce model for the utility function
+5. Given input X, estimate the acquisition values --> transform to inclusion probabilties
+6. Illustrate inclusion probabilities on plot. 6 figures:
+- GPR fit to data
+- Utility function
+- EI SEI, LCB and PU figures.
+"""

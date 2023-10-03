@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.exceptions import ConvergenceWarning
 import copy
 from sklearn.model_selection import GridSearchCV
+import random
 # Disable ConvergenceWarnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
@@ -20,17 +21,24 @@ class BOsampler:
                  hyperparam_grid=None,
                  X=None,
                  y=None,
-                 y_noise_params=None):
+                 y_noise_params=None,
+                 normalize_data=True,
+                 cv_folds=5,
+                 sample_size=5):
         self.hyperparam_grid = hyperparam_grid # dictionary of model hyperparameters, including kernels.
         self.y_noise_params = y_noise_params
         self.y_noise = None
         self.X = X # The input features of the data set provided for the sampler.
+        self.y = y
+        self.sample_size = sample_size
         if self.y_noise_params is not None:
-            self.y_noise = np.random.normal(y_noise_params['mean'], y_noise_params['std'], size=(y.size,))
+            self.y_noise = np.random.normal(y_noise_params['mean'], y_noise_params['std'], size=self.y.shape)
             self.y = self.y + self.y_noise # Add noise to the target.
-        else:
-            self.y = y # The target variable value of the data set.
         self.scaler = None # The input feature scaler constructed with the X data.
+        if normalize_data is True:
+            self.initialize_scaler()
+            self.normalize_x()
+            self.cv_folds = cv_folds
 
     """
     Create a scaler for the X data.
@@ -47,62 +55,39 @@ class BOsampler:
     def inverted_lower_confidence_bound(y_mean=0, y_std=0, l=0.2):
         return l*y_std - y_mean
     
-    def optimize_gpr_model(self):
+    def optimize_gpr_model(self, X=None, y=None):
         gpr = GaussianProcessRegressor()
-        grid_search = GridSearchCV(gpr, self.hyperparam_grid, cv=5)
-        grid_search.fit(self.X, self.y)
+        grid_search = GridSearchCV(gpr, self.hyperparam_grid, cv=self.cv_folds)
+        grid_search.fit(X, y)
         best_params = grid_search.best_params_
         best_estimator = grid_search.best_estimator_
-        y_pred = best_estimator.predict(X)
-
-
-
-
-    
-    """
-    Generate a sample from the true function with added Gaussian noise.
-    """
-    def get_random_sample_from_true_function(xmin=-10, xmax=10, num_samples=1, noise_std=0.00001):
-        random_x = np.random.uniform(xmin, xmax, num_samples)
-        sample_sort_indices = np.argsort(random_x, axis=0) # Sort the x into ascending order (makes plotting nicer)
-        random_x = random_x[sample_sort_indices]
-        # set x manually
-        random_x = np.array([-19, -13, -10, -2.6, 1, 3, 8, 12, 15, 18])
-        random_y = true_function(random_x)
-        random_y_with_noise = random_y + np.random.normal(0, noise_std, size=(random_x.size,))
-        return random_x.reshape(-1, 1), random_y_with_noise.reshape(-1, 1) # Return and make sure they are 2D-matrices with one column.
+        return best_estimator
+        #y_pred = best_estimator.predict(X)
 
     """
-    Initiate an unfitted Gaussian Process Regressor model.
+    Get and return a random sample from the X,y data.
     """
-    def initiate_gpr_model():
-        kernel = RBF(length_scale=1) + C(0.05, (1e-3, 1e3))
-        #kernel = RBF(length_scale=1) + WhiteKernel(noise_level=0.00001)
-        # Create the Gaussian Process Regressor model with the defined kernel
-        model = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=20) 
-        return model
+    def get_sample(self, sample_size=1):
+        # Take a random sample without replacement
+        index_list = np.arange(0, self.y.size)
+        random_sample_indices = np.random.choice(index_list, sample_size, replace=False)
+        random_sample_x = self.X[random_sample_indices, :]
+        random_sample_y = self.y[random_sample_indices, 0]
+        return random_sample_x, random_sample_y
 
     """
-    Fit a new GPR model into given data.
+    Take a sample from the X,y data and fit a gpr to sample data.
     """
-    def fit_gaussian_process(X_train=None, y_train=None):
-        model = initiate_gpr_model()
-        #param_grid = {
-        #'kernel': [1.0 * RBF(length_scale=1.0), 1.0 * Matern(length_scale=1.0)],
-        #'alpha': [1e-4, 1e-3, 1e-2]
-        #}
-        #gpr = GaussianProcessRegressor()
-        #grid_search = GridSearchCV(gpr, param_grid, cv=5)
-        #grid_search.fit(X_train, y_train)
-        #model = grid_search.best_estimator_
-        model.fit(X_train, y_train)
-        return model
+    def sample_optimize_gpr_model(self):
+        random_sample_x, random_sample_y = self.get_sample(sample_size=self.sample_size)
+        best_estimator = self.optimize_gpr_model(X=random_sample_x, y=random_sample_y)
+        return best_estimator
 
 
     """
     Evaluate sample point utilities.
     """
-    def evaluate_single_point_impact(x_data=None, y_data=None, nfolds=5):
+    def evaluate_single_point_impact(self, x_data=None, y_data=None, nfolds=5):
         loo = LeaveOneOut()
         loo_ind = 1
         point_utility_list = np.zeros(shape=(len(y_data), 1))
@@ -118,10 +103,8 @@ class BOsampler:
                 # Vertically stack the arrays
                 train_x_with_new_point = np.vstack((train_x, single_point_x))
                 train_y_with_new_point = np.vstack((train_y, single_point_y))
-                model_without_point = initiate_gpr_model()
-                model_without_point.fit(X=train_x, y=train_y)
-                model_with_point = initiate_gpr_model()
-                model_with_point.fit(X=train_x_with_new_point, y=train_y_with_new_point)
+                model_without_point = self.optimize_gpr_model(X=train_x, y=train_y)
+                model_with_point = self.optimize_gpr_model(X=train_x_with_new_point, y=train_y_with_new_point)
                 predicted_y_without_point = model_without_point.predict(test_x)
                 predicted_y_with_point = model_with_point.predict(test_x)
                 without_point_residual += np.sum(np.abs(predicted_y_without_point - test_y)) / len(test_y)
@@ -169,7 +152,6 @@ class BOsampler:
     def predictive_uncertainty(x_data, y_mean, y_std):
         max_std_ind = np.where(y_std == np.max(y_std))[0][0]
         return x_data[max_std_ind], y_mean[max_std_ind]
-
 
 
     """
