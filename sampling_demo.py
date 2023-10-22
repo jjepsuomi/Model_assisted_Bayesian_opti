@@ -4,6 +4,19 @@ import importlib
 importlib.reload(bosampler)
 from bosampler import BOsampler
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel, Matern
+
+"""
+Container for making sure that we deal with 2D data. 
+ """
+def check_2d_format(arr):
+    arr = np.array(arr)
+    # Check if the input is already 2D (n,m)
+    if len(arr.shape) == 2:
+        return arr  # Do nothing if it's already 2D
+    # If it's 1D (n,), convert it to (n,1)
+    elif len(arr.shape) == 1:
+        return arr.reshape(-1, 1)
+
 """
 Gaussian function.
 """
@@ -36,13 +49,13 @@ def true_function(input_x=0):
 print(f'***************************\nStarting analysis\n***************************')
 input_x_interval_min = -20
 input_x_interval_max = 20
-number_y_points_from_true_function = 20
+number_y_points_from_true_function = 100
 print(f'Generating true function {number_y_points_from_true_function} points from x-interval: [{input_x_interval_min}, {input_x_interval_max}]')
 x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from_true_function)
 y = true_function(x)
 print(f'Shape of x is: {x.shape}')
 print(f'Shape of y is: {y.shape}')
-x, y = x.reshape(-1, 1), y.reshape(-1, 1)
+x, y = check_2d_format(x), check_2d_format(y)
 print(f'New shape of x is: {x.shape}')
 print(f'New shape of y is: {y.shape}')
 
@@ -52,9 +65,9 @@ length_scales = [0.5, 1.0, 1.5]
 
 # Define the hyperparameter grid
 param_grid = {
-    'kernel': [RBF(length_scale=2.0) for l in np.arange(0.1, 3.1, 0.1)],
-    'alpha': [np.power(10.0, -x) for x in np.arange(1, 6, 1)],
-    'n_restarts_optimizer': [n_restarts for n_restarts in np.arange(1, 11, 1)],
+    'kernel': [RBF(length_scale=2.0) for l in np.arange(0, 3, 1)],
+    'alpha': [np.power(10.0, -x) for x in np.arange(1, 3, 1)],
+    'n_restarts_optimizer': [n_restarts for n_restarts in np.arange(1, 5, 1)],
 }
 print(param_grid['alpha'])
 """
@@ -72,17 +85,22 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        y=y,
                        y_noise_params=noise_parameters,
                        normalize_data=True,
-                       cv_folds=5,
+                       cv_folds=3,
                        sample_size=20)
-bo_sampler.sample_optimize_gpr_model()
+bo_sampler.fit_response_gpr_model()
+bo_sampler.estimate_utility_function()
 
+x = np.linspace(input_x_interval_min, input_x_interval_max, 10)
+x = x.reshape(-1, 1)
+bo_sampler.get_inclusion_probabilities(X=x)
 
 # STEPS TO DO
 """
 1. Get the data
 2. Normalize the features
-3. Produce model based on the data given to the procedure. 
-4. Produce model for the utility function
+3. Produce model based on the data given to the procedure.
+4. Estimate the utility function
+4. Produce GPR model for the utility function
 5. Given input X, estimate the acquisition values --> transform to inclusion probabilties
 6. Illustrate inclusion probabilities on plot. 6 figures:
 - GPR fit to data
