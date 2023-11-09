@@ -166,7 +166,7 @@ class BOsampler:
         return self.check_2d_format(point_utility_list) # Return the utility values as 2D-matrix.
                 
 
-    def expected_improvement(x_data, surrogate_model, f_min, var_epsilon=1e-10):
+    def expected_improvement(self, x_data, surrogate_model, f_min, var_epsilon):
         mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
         # Calculate the standard score Z with a small epsilon to avoid division by zero.
         sigma[sigma == 0] = var_epsilon # In places where sigma is 0, set sigma to small value to prevent division by zero.
@@ -177,7 +177,7 @@ class BOsampler:
         ei = (f_min - mu) * Phi + sigma * phi
         return ei
 
-    def scaled_expected_improvement(x_data, surrogate_model, f_min, var_epsilon=1e-10):
+    def scaled_expected_improvement(self, x_data, surrogate_model, f_min, var_epsilon):
         mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
         # Calculate the standard score Z with a small epsilon to avoid division by zero.
         sigma[sigma == 0] = var_epsilon # In places where sigma is 0, set sigma to small value to prevent division by zero.
@@ -226,22 +226,36 @@ class BOsampler:
                 normalized_acquisition_values[normalized_acquisition_values == 0] = 0.2 # p € (0, 1)
         return normalized_acquisition_values
     
-    def get_inclusion_probabilities(self, X=None, method='pu'):
+    
+    def get_inclusion_probabilities(self, X=None, method='pu', l=0.2):
+        X = self.check_2d_format(X)
+        inclusion_probabilities = None
         # Check for normalization
         if self.scaler is not None: 
             X = self.scaler.transform(X)
         # Next step, we solve the acquisition values.
         if method == 'pu': # Predictive uncertainty
-            y_mean, y_std = self.model.predict(X=X, return_std=True)
-            y_mean, y_std = self.check_2d_format(y_mean), self.check_2d_format(y_std)
+            #y_mean, y_std = self.model.predict(X=X, return_std=True)
+            #y_mean, y_std = self.check_2d_format(y_mean), self.check_2d_format(y_std)
+            _, y_std = self.model.predict(X=X, return_std=True)
+            y_std = self.check_2d_format(y_std)
+            inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=y_std)
         elif method == 'ilcb':
-            pass
+            y_mean, y_std = self.utility_model.predict(X=X, return_std=True)
+            ilcb_acquisition_values = self.inverted_lower_confidence_bound(y_mean=y_mean, y_std=y_std, l=l)
+            inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=ilcb_acquisition_values)
         elif method == 'ei':
-            pass
+            current_minimum_utility_value = np.min(self.utility_data_y)
+            #print(f'Minimum utility value is: {min_utility_y}')
+            ei_acquisition_values = self.expected_improvement(X, self.utility_model, current_minimum_utility_value, 1e-10)
+            inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=ei_acquisition_values)
         elif method == 'sei':
-            pass
+            current_minimum_utility_value = np.min(self.utility_data_y)
+            sei_acquisition_values = self.scaled_expected_improvement(X, self.utility_model, current_minimum_utility_value, 1e-10)
+            inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=sei_acquisition_values)
+        return inclusion_probabilities
 
-    def sample_by_acquisition_values(self, inclusion_probabilities=None, sample_count=1):
+    def sample_by_inclusion_probabilities(self, inclusion_probabilities=None, sample_count=1):
         # Your set of 10 numbers with selection probabilities
         numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         inclusion_probabilities = [0.1, 0.2, 0.05, 0.15, 0.1, 0.1, 0.05, 0.1, 0.1, 0.05]
