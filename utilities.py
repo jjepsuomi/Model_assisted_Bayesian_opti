@@ -44,7 +44,7 @@ data1 = np.random.normal(0, 1, 1000)
 data2 = np.random.normal(1, 1.5, 1000)
 data3 = np.random.normal(-5, 0.5, 1000)
 
-legend_labels = ['Source A', 'Source Ba', 'Source C']
+legend_labels = ['Source A', 'Source Bad', 'Source C']
 plot_density_histograms([data1, data2, data3], legend_labels=legend_labels)
 
 print("hello there")
