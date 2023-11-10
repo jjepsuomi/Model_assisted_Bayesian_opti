@@ -256,7 +256,7 @@ class BOsampler:
         return inclusion_probabilities
 
     def sample_by_inclusion_probabilities(self, inclusion_probabilities=None, sample_count=1):
-        # Your set of 10 numbers with selection probabilities
+        # Your set of 10 numbers with selection probabilities,
         numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         inclusion_probabilities = [0.1, 0.2, 0.05, 0.15, 0.1, 0.1, 0.05, 0.1, 0.1, 0.05]
         # Take a random sample of 5 numbers based on the probabilities
