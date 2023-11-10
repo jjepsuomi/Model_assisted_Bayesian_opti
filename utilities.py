@@ -2,47 +2,53 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import entropy
 
-def kl_divergence(p, q):
-    return entropy(p, q)
+def kl_divergence(true_distribution, estimated_distribution):
+    return entropy(true_distribution, estimated_distribution)
 
 def plot_density_histograms(data_sources, bins=30, legend_labels=None):
     # Set up bins
     bins = np.linspace(min(min(data) for data in data_sources), max(max(data) for data in data_sources), bins)
 
-    # Plot histograms and calculate densities
+    # Calculate densities
     densities = []
-    for i, data in enumerate(data_sources):
-        label = f'Data {i + 1}' if legend_labels is None else legend_labels[i]
-        density, _, _ = plt.hist(data, bins=bins, density=True, alpha=0.5, label=label)
-        density[density==0]=1e-10
+    for data in data_sources:
+        density, _ = np.histogram(data, bins=bins, density=True)
+        density[density == 0] = 1e-20 # 
         densities.append(density)
 
-    # Calculate and display KL divergence for data2 and data3
-    if len(data_sources) >= 3:
-        kl_divergence_2_vs_1 = kl_divergence(densities[1], densities[0])
-        kl_divergence_3_vs_1 = kl_divergence(densities[2], densities[0])
+    label, kl_divergence_vs_ref = None, None
+    # Plot densities using bar plot
+    for i, density in enumerate(densities):
+        if i == 0: # Reference data
+            label = f'Data {i + 1}' if legend_labels is None else f'{legend_labels[i]}'
+            plt.bar(bins[:-1], density, width=bins[1] - bins[0], alpha=0.5, label=label)
+        else:
+            kl_divergence_vs_ref = round(kl_divergence(densities[0], density), 2)
+            label = f'Data {i + 1}' if legend_labels is None else f'{legend_labels[i]}, KL: {kl_divergence_vs_ref}'
+            plt.bar(bins[:-1], density, width=bins[1] - bins[0], alpha=0.5, label=label)
 
-        label_2 = f'Data 2 (KL Div: {kl_divergence_2_vs_1:.4f})'
-        label_3 = f'Data 3 (KL Div: {kl_divergence_3_vs_1:.4f})'
-
-        plt.legend([label_2, label_3] + (legend_labels[2:] if legend_labels else []))
-
-    else:
-        plt.legend()
+    plt.legend()
 
     # Add labels
     plt.xlabel('Value')
     plt.ylabel('Density')
     plt.title('Density Histograms and KL Divergence for Data Sets')
-
+    plt.grid(True)
     # Show the plot
     plt.show()
 
 # Example usage with custom legend labels
 np.random.seed(42)
-data1 = np.random.normal(0, 1, 1000)
+
+
+# Incorporate the reference data into the data sources
+reference_data = np.random.normal(0, 1, 1000)
 data2 = np.random.normal(1, 1.5, 1000)
 data3 = np.random.normal(-5, 0.5, 1000)
+data_sources = [reference_data, data2, data3]
 
-legend_labels = ['Source A', 'Source B', 'Source C']
-plot_density_histograms([data1, data2, data3], legend_labels=legend_labels)
+# Calculate densities
+#densities, bins = calculate_densities(data_sources)
+
+legend_labels = ['Reference', 'BO', 'SRS']
+plot_density_histograms(data_sources, 30, legend_labels=legend_labels)
