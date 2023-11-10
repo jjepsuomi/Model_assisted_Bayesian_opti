@@ -41,14 +41,12 @@ def plot_density_histograms(data_sources, bins=30, legend_labels=None):
 np.random.seed(42)
 
 
-# Incorporate the reference data into the data sources
+# Incorporate the reference data into the data sourcesg
 reference_data = np.random.normal(0, 1, 1000)
 data2 = np.random.normal(1, 1.5, 1000)
 data3 = np.random.normal(-5, 0.5, 1000)
 data_sources = [reference_data, data2, data3]
 
-# Calculate densities
-#densities, bins = calculate_densities(data_sources)
 
 legend_labels = ['Reference', 'BO', 'SRS']
 plot_density_histograms(data_sources, 30, legend_labels=legend_labels)
