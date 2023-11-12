@@ -4,7 +4,7 @@ import importlib
 importlib.reload(bosampler)
 from bosampler import BOsampler
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel, Matern
-from utilities import plot_density_histogram
+#from utilities import plot_density_histogram
 
 
 """
@@ -64,7 +64,7 @@ print(f'New shape of y is: {y.shape}')
 # Define a list of length scale values to search over for RBF and Matern kernels
 length_scales = [0.5, 1.0, 1.5]
 
-plot_density_histogram(y)
+#plot_density_histogram(y)
 # Define the hyperparameter grid
 param_grid = {
     'kernel': [RBF(length_scale=2.0) for l in np.arange(0, 3, 1)],
@@ -87,15 +87,15 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        y=y,
                        y_noise_params=noise_parameters,
                        normalize_data=True,
-                       cv_folds=3,
-                       sample_size=10)
-bo_sampler.fit_response_gpr_model()
-bo_sampler.estimate_utility_function()
+                       cv_folds=4,
+                       sample_size=20)
+#bo_sampler.fit_response_gpr_model()
+#bo_sampler.estimate_utility_function()
 
-x = np.linspace(input_x_interval_min, input_x_interval_max, 10)
-x = x.reshape(-1, 1)
-inc_probs = bo_sampler.get_inclusion_probabilities(X=x, method='ei')
-
+#x = np.linspace(input_x_interval_min, input_x_interval_max, 10)
+#x = x.reshape(-1, 1)
+#inc_probs = bo_sampler.get_inclusion_probabilities(X=x, method='ei')
+bo_sampler.perform_sampling_comparison(sample_count=20, sampling_iterations=5)
 # STEPS TO DO
 """
 1. Get the data

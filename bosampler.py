@@ -11,6 +11,7 @@ from sklearn.exceptions import ConvergenceWarning
 import copy
 from sklearn.model_selection import GridSearchCV
 import random
+from utilities import calculate_histogram_distances
 # Disable ConvergenceWarnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
@@ -95,6 +96,12 @@ class BOsampler:
     def fit_response_gpr_model(self):
         self.model = self.optimize_gpr_model(X=self.sample_x, y=self.sample_y)
 
+    """
+    Fit GPR model to the given data.
+    """
+    def fit_and_get_gpr_model(self, X, y):
+        return self.optimize_gpr_model(X=X, y=y)
+
 
     """
     Get and return a random sample from the X,y data and set them to object attributes immediately.
@@ -119,15 +126,16 @@ class BOsampler:
         random_sample_x = self.check_2d_format(self.X[random_sample_indices, :])
         random_sample_y = self.check_2d_format(self.y[random_sample_indices, 0])
         return random_sample_x, random_sample_y
+    
+
 
     """
     Calculate utility values and corresponding GPR model.
     """
-    def estimate_utility_function(self):
-        utility_values = self.evaluate_single_point_impact(x_data=self.sample_x, y_data=self.sample_y, nfolds=self.cv_folds)
-        self.utility_data_x = self.sample_x
-        self.utility_data_y = utility_values
-        self.utility_model = self.optimize_gpr_model(X=self.utility_data_x, y=self.utility_data_y)
+    def estimate_utility_function(self, X, y):
+        utility_values = self.evaluate_single_point_impact(x_data=X, y_data=y, nfolds=self.cv_folds)
+        utility_model = self.optimize_gpr_model(X=X, y=utility_values)
+        return X, utility_values, utility_model
 
 
     """
@@ -159,10 +167,10 @@ class BOsampler:
             without_point_residual = without_point_residual / nfolds
             with_point_residual = with_point_residual / nfolds
             point_utility_list[single_point_index] = with_point_residual - without_point_residual
-            if point_utility_list[single_point_index] < 0:
-                print(f'Point {loo_ind+1}/{len(y_data)} addition improved residual by: {point_utility_list[single_point_index][0][0]}')
-            else:
-                print(f'Point {loo_ind+1}/{len(y_data)} addition did not improve residual, but increased: {point_utility_list[single_point_index][0][0]}')
+            #if point_utility_list[single_point_index] < 0:
+            #    print(f'Point {loo_ind+1}/{len(y_data)} addition improved residual by: {point_utility_list[single_point_index][0][0]}')
+            #else:
+            #    print(f'Point {loo_ind+1}/{len(y_data)} addition did not improve residual, but increased: {point_utility_list[single_point_index][0][0]}')
         return self.check_2d_format(point_utility_list) # Return the utility values as 2D-matrix.
                 
 
@@ -227,7 +235,13 @@ class BOsampler:
         return normalized_acquisition_values
     
     
-    def get_inclusion_probabilities(self, X=None, method='pu', l=0.2):
+    def get_inclusion_probabilities(self, 
+                                    X=None, 
+                                    method='pu', 
+                                    l=0.2,
+                                    response_model=None,
+                                    utility_model=None,
+                                    min_utility=None):
         X = self.check_2d_format(X)
         inclusion_probabilities = None
         # Check for normalization
@@ -237,32 +251,68 @@ class BOsampler:
         if method == 'pu': # Predictive uncertainty
             #y_mean, y_std = self.model.predict(X=X, return_std=True)
             #y_mean, y_std = self.check_2d_format(y_mean), self.check_2d_format(y_std)
-            _, y_std = self.model.predict(X=X, return_std=True)
+            _, y_std = response_model.predict(X=X, return_std=True)
             y_std = self.check_2d_format(y_std)
             inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=y_std)
         elif method == 'ilcb':
-            y_mean, y_std = self.utility_model.predict(X=X, return_std=True)
+            y_mean, y_std = utility_model.predict(X=X, return_std=True)
             ilcb_acquisition_values = self.inverted_lower_confidence_bound(y_mean=y_mean, y_std=y_std, l=l)
             inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=ilcb_acquisition_values)
         elif method == 'ei':
-            current_minimum_utility_value = np.min(self.utility_data_y)
             #print(f'Minimum utility value is: {min_utility_y}')
-            ei_acquisition_values = self.expected_improvement(X, self.utility_model, current_minimum_utility_value, 1e-10)
+            ei_acquisition_values = self.expected_improvement(X, utility_model, min_utility, 1e-10)
             inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=ei_acquisition_values)
         elif method == 'sei':
-            current_minimum_utility_value = np.min(self.utility_data_y)
-            sei_acquisition_values = self.scaled_expected_improvement(X, self.utility_model, current_minimum_utility_value, 1e-10)
+            sei_acquisition_values = self.scaled_expected_improvement(X, utility_model, min_utility, 1e-10)
             inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=sei_acquisition_values)
-        return inclusion_probabilities
-
-    def sample_by_inclusion_probabilities(self, inclusion_probabilities=None, sample_count=1):
-        # Your set of 10 numbers with selection probabilities,
-        numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        inclusion_probabilities = [0.1, 0.2, 0.05, 0.15, 0.1, 0.1, 0.05, 0.1, 0.1, 0.05]
-        # Take a random sample of 5 numbers based on the probabilities
-        sample = random.choices(numbers, weights=inclusion_probabilities, k=sample_count)
+        inc_prob_sum = np.sum(inclusion_probabilities)
+        norm_inc_probs = np.array([inc_prob/float(inc_prob_sum) for inc_prob in inclusion_probabilities])
+        return norm_inc_probs
 
 
+    def sample_by_inclusion_probabilities(self, population_X=None, population_y=None, inclusion_probabilities=None, sample_count=1):
+        population_X, population_y = self.check_2d_format(population_X), self.check_2d_format(population_y)
+        # Create a list of indices representing the population
+        index_list = list(range(population_y.size))
+        # Take a sample without replacement
+        if inclusion_probabilities is not None:
+            print(inclusion_probabilities, inclusion_probabilities.shape)
+            inclusion_probabilities = np.reshape(inclusion_probabilities, newshape=(inclusion_probabilities.size,))
+        sampled_indices = np.random.choice(a=index_list, size=sample_count, replace=False, p=inclusion_probabilities)
+        # Remove sampled indices from the original set
+        remaining_indices = [index for index in index_list if index not in sampled_indices]
+        # Extract the sampled data based on the sampled indices
+        sampled_X = population_X[sampled_indices, :]
+        sampled_y = population_y[sampled_indices]
+        # Update the original set by removing the sampled data
+        remaining_population_X = population_X[remaining_indices, :]
+        remaining_population_y = population_y[remaining_indices]
+        return sampled_X, sampled_y, remaining_population_X, remaining_population_y
+
+    """
+    Do data sampling using the BO-sampling and compare against SRS sampling.
+    """
+    def perform_sampling_comparison(self, sample_count=1, sampling_iterations=1):
+        # Step 1: Get initial random sample from the whole population --> the prior data set.
+        inclusion_probabilities = None
+        remaining_population_X, remaining_population_y = self.X, self.y
+        prior_X, prior_y = np.empty((0, self.X.shape[1])), np.empty((0, 1))
+        for sampling_iteration_idx in range(sampling_iterations):
+            sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
+                                                                                                                        population_y=remaining_population_y, 
+                                                                                                                        inclusion_probabilities=inclusion_probabilities, 
+                                                                                                                        sample_count=sample_count)
+            prior_X, prior_y = np.vstack((prior_X, sample_X)), np.vstack((prior_y, sample_y))
+            response_grp_model = self.fit_and_get_gpr_model(prior_X, prior_y)
+            _, utility_values, utility_model = self.estimate_utility_function(prior_X, prior_y)
+            bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, prior_y], num_of_bins=30, legend_labels=['Reference', 'Sample'])
+            inclusion_probabilities = self.get_inclusion_probabilities(X=remaining_population_X, 
+                                                                       method='pu', 
+                                                                       l=0.2,
+                                                                       response_model=response_grp_model,
+                                                                       utility_model=utility_model,
+                                                                       min_utility=np.min(utility_values))
+            print(KL_divergence[1], sampling_iteration_idx)
 
 
 
