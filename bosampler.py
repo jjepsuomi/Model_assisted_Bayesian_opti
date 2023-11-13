@@ -276,7 +276,6 @@ class BOsampler:
         index_list = list(range(population_y.size))
         # Take a sample without replacement
         if inclusion_probabilities is not None:
-            print(inclusion_probabilities, inclusion_probabilities.shape)
             inclusion_probabilities = np.reshape(inclusion_probabilities, newshape=(inclusion_probabilities.size,))
         sampled_indices = np.random.choice(a=index_list, size=sample_count, replace=False, p=inclusion_probabilities)
         # Remove sampled indices from the original set
@@ -292,27 +291,29 @@ class BOsampler:
     """
     Do data sampling using the BO-sampling and compare against SRS sampling.
     """
-    def perform_sampling_comparison(self, sample_count=1, sampling_iterations=1):
+    def perform_sampling_comparison(self, sample_count=1, sampling_iterations=1, sampling_method_list=['pu']):
         # Step 1: Get initial random sample from the whole population --> the prior data set.
         inclusion_probabilities = None
         remaining_population_X, remaining_population_y = self.X, self.y
         prior_X, prior_y = np.empty((0, self.X.shape[1])), np.empty((0, 1))
+
         for sampling_iteration_idx in range(sampling_iterations):
-            sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
-                                                                                                                        population_y=remaining_population_y, 
-                                                                                                                        inclusion_probabilities=inclusion_probabilities, 
-                                                                                                                        sample_count=sample_count)
-            prior_X, prior_y = np.vstack((prior_X, sample_X)), np.vstack((prior_y, sample_y))
-            response_grp_model = self.fit_and_get_gpr_model(prior_X, prior_y)
-            _, utility_values, utility_model = self.estimate_utility_function(prior_X, prior_y)
-            bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, prior_y], num_of_bins=30, legend_labels=['Reference', 'Sample'])
-            inclusion_probabilities = self.get_inclusion_probabilities(X=remaining_population_X, 
-                                                                       method='pu', 
-                                                                       l=0.2,
-                                                                       response_model=response_grp_model,
-                                                                       utility_model=utility_model,
-                                                                       min_utility=np.min(utility_values))
-            print(KL_divergence[1], sampling_iteration_idx)
+            for sampling_method in sampling_method_list:
+                sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
+                                                                                                                            population_y=remaining_population_y, 
+                                                                                                                            inclusion_probabilities=inclusion_probabilities, 
+                                                                                                                            sample_count=sample_count)
+                prior_X, prior_y = np.vstack((prior_X, sample_X)), np.vstack((prior_y, sample_y))
+                response_grp_model = self.fit_and_get_gpr_model(prior_X, prior_y)
+                _, utility_values, utility_model = self.estimate_utility_function(prior_X, prior_y)
+                bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, prior_y], num_of_bins=30, legend_labels=['Reference', 'Sample'])
+                inclusion_probabilities = self.get_inclusion_probabilities(X=remaining_population_X, 
+                                                                        method='pu', 
+                                                                        l=0.2,
+                                                                        response_model=response_grp_model,
+                                                                        utility_model=utility_model,
+                                                                        min_utility=np.min(utility_values))
+            
 
 
 
