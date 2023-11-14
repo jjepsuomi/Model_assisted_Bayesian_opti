@@ -2,6 +2,7 @@ import numpy as np
 import bosampler
 import importlib
 importlib.reload(bosampler)
+import matplotlib.pyplot as plt
 from bosampler import BOsampler
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel, Matern
 #from utilities import plot_density_histogram
@@ -51,7 +52,7 @@ def true_function(input_x=0):
 print(f'***************************\nStarting analysis\n***************************')
 input_x_interval_min = -20
 input_x_interval_max = 20
-number_y_points_from_true_function = 150
+number_y_points_from_true_function = 300
 print(f'Generating true function {number_y_points_from_true_function} points from x-interval: [{input_x_interval_min}, {input_x_interval_max}]')
 x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from_true_function)
 y = true_function(x)
@@ -67,9 +68,9 @@ length_scales = [0.5, 1.0, 1.5]
 #plot_density_histogram(y)
 # Define the hyperparameter grid
 param_grid = {
-    'kernel': [RBF(length_scale=2.0) for l in np.arange(0, 3, 1)],
+    'kernel': [RBF(length_scale=l) for l in np.arange(1, 8, 1)],
     'alpha': [np.power(10.0, -x) for x in np.arange(1, 3, 1)],
-    'n_restarts_optimizer': [n_restarts for n_restarts in np.arange(1, 5, 1)],
+    'n_restarts_optimizer': [n_restarts for n_restarts in np.arange(1, 10, 1)],
 }
 print(param_grid['alpha'])
 """
@@ -88,15 +89,25 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        y_noise_params=noise_parameters,
                        normalize_data=True,
                        cv_folds=4,
-                       sample_size=20)
+                       sample_size=50)
 #bo_sampler.fit_response_gpr_model()
 #bo_sampler.estimate_utility_function()
 
 #x = np.linspace(input_x_interval_min, input_x_interval_max, 10)
 #x = x.reshape(-1, 1)
 #inc_probs = bo_sampler.get_inclusion_probabilities(X=x, method='ei')
-KL_list = bo_sampler.perform_sampling_comparison(sample_count=20, sampling_iterations=5, sampling_method_list=['srs', 'pu'])
+KL_list = bo_sampler.perform_sampling_comparison(sample_count=30, sampling_iterations=5, sampling_method_list=['srs', 'pu'])
 print(KL_list)
+# Plotting
+plt.figure()  # This line creates a new figure
+plt.plot(KL_list[:,0], color='blue', label='SRS')
+plt.plot(KL_list[:,1], color='red', label='BO')
+
+# Adding legends
+plt.legend()
+plt.grid(True)
+# Show the plot
+plt.show()
 
 # STEPS TO DO
 """

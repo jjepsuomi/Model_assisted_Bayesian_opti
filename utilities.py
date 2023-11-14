@@ -40,7 +40,7 @@ def calculate_histogram_distances(data_sources=None, num_of_bins=30, legend_labe
     plt.ylabel('Density')
     plt.title('Density Histograms and KL Divergence for Data Sets')
     plt.grid(True)
-    plt.show()
+    #plt.show()
 
     return bins, densities, KL_divergence
 

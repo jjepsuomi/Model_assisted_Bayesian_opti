@@ -329,7 +329,9 @@ class BOsampler:
                                                                                                                                 inclusion_probabilities=inclusion_probabilities, 
                                                                                                                                 sample_count=sample_count)
                 sample_X, sample_y = np.vstack((sample_X, new_sample_X)), np.vstack((sample_y, new_sample_y))
-                _, _, KL_divergence = calculate_histogram_distances(data_sources=[self.y, sample_y], num_of_bins=30, legend_labels=['Ref.', 'Sample'])
+                sample_response_gpr_model = self.fit_and_get_gpr_model(sample_X, sample_y)
+                y_mean = self.check_2d_format(sample_response_gpr_model.predict(X=remaining_population_X, return_std=False))
+                _, _, KL_divergence = calculate_histogram_distances(data_sources=[self.y, np.vstack((sample_y, y_mean))], num_of_bins=30, legend_labels=['Ref.', 'Sample'])
                 print(KL_divergence)
                 KL_list[sampling_iteration_idx, sampling_method_idx] = KL_divergence[1]
         return KL_list
