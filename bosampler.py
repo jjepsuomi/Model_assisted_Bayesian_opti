@@ -295,24 +295,44 @@ class BOsampler:
         # Step 1: Get initial random sample from the whole population --> the prior data set.
         inclusion_probabilities = None
         remaining_population_X, remaining_population_y = self.X, self.y
-        prior_X, prior_y = np.empty((0, self.X.shape[1])), np.empty((0, 1))
-
-        for sampling_iteration_idx in range(sampling_iterations):
-            for sampling_method in sampling_method_list:
-                sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
-                                                                                                                            population_y=remaining_population_y, 
-                                                                                                                            inclusion_probabilities=inclusion_probabilities, 
-                                                                                                                            sample_count=sample_count)
-                prior_X, prior_y = np.vstack((prior_X, sample_X)), np.vstack((prior_y, sample_y))
-                response_grp_model = self.fit_and_get_gpr_model(prior_X, prior_y)
-                _, utility_values, utility_model = self.estimate_utility_function(prior_X, prior_y)
-                bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, prior_y], num_of_bins=30, legend_labels=['Reference', 'Sample'])
-                inclusion_probabilities = self.get_inclusion_probabilities(X=remaining_population_X, 
-                                                                        method='pu', 
-                                                                        l=0.2,
-                                                                        response_model=response_grp_model,
-                                                                        utility_model=utility_model,
-                                                                        min_utility=np.min(utility_values))
+        #prior_X, prior_y = np.empty((0, self.X.shape[1])), np.empty((0, 1))
+        prior_X, prior_y, prior_remaining_population_X, prior_remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
+                                                                                                                    population_y=remaining_population_y, 
+                                                                                                                    inclusion_probabilities=None, 
+                                                                                                                    sample_count=sample_count)
+        KL_list = np.zeros(shape=(sampling_iterations, len(sampling_method_list)))
+        for sampling_method_idx, sampling_method in enumerate(sampling_method_list):
+            sample_X, sample_y = copy.deepcopy(prior_X), copy.deepcopy(prior_y) # The current sample
+            remaining_population_X, remaining_population_y = copy.deepcopy(prior_remaining_population_X), copy.deepcopy(prior_remaining_population_y) # The current sample
+            new_sample_X, new_sample_y = np.empty((0, self.X.shape[1])), np.empty((0, 1)) # Sample to be added.
+            for sampling_iteration_idx in range(sampling_iterations): # How many times to perform the sampling
+                print(f'Doing sampling iteration {sampling_iteration_idx+1}/{sampling_iterations} for: {sampling_method}')
+                if sample_count > remaining_population_y.size:
+                    sample_count = remaining_population_y.size
+                if sampling_method == 'srs':
+                    new_sample_X, new_sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
+                                                                                                                                population_y=remaining_population_y, 
+                                                                                                                                inclusion_probabilities=None, 
+                                                                                                                                sample_count=sample_count)
+                else:
+                    response_gpr_model = self.fit_and_get_gpr_model(sample_X, sample_y)
+                    #_, utility_values, utility_model = self.estimate_utility_function(sample_X, sample_y)
+                    utility_values, utility_model = None,None
+                    inclusion_probabilities = self.get_inclusion_probabilities(X=remaining_population_X, 
+                                                                                method=sampling_method, 
+                                                                                l=0.2,
+                                                                                response_model=response_gpr_model,
+                                                                                utility_model=utility_model,
+                                                                                min_utility=np.min(utility_values))
+                    new_sample_X, new_sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
+                                                                                                                                population_y=remaining_population_y, 
+                                                                                                                                inclusion_probabilities=inclusion_probabilities, 
+                                                                                                                                sample_count=sample_count)
+                sample_X, sample_y = np.vstack((sample_X, new_sample_X)), np.vstack((sample_y, new_sample_y))
+                _, _, KL_divergence = calculate_histogram_distances(data_sources=[self.y, sample_y], num_of_bins=30, legend_labels=['Ref.', 'Sample'])
+                print(KL_divergence)
+                KL_list[sampling_iteration_idx, sampling_method_idx] = KL_divergence[1]
+        return KL_list
             
 
 

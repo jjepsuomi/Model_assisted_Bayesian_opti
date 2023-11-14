@@ -51,7 +51,7 @@ def true_function(input_x=0):
 print(f'***************************\nStarting analysis\n***************************')
 input_x_interval_min = -20
 input_x_interval_max = 20
-number_y_points_from_true_function = 100
+number_y_points_from_true_function = 150
 print(f'Generating true function {number_y_points_from_true_function} points from x-interval: [{input_x_interval_min}, {input_x_interval_max}]')
 x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from_true_function)
 y = true_function(x)
@@ -95,7 +95,9 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
 #x = np.linspace(input_x_interval_min, input_x_interval_max, 10)
 #x = x.reshape(-1, 1)
 #inc_probs = bo_sampler.get_inclusion_probabilities(X=x, method='ei')
-bo_sampler.perform_sampling_comparison(sample_count=20, sampling_iterations=5)
+KL_list = bo_sampler.perform_sampling_comparison(sample_count=20, sampling_iterations=5, sampling_method_list=['srs', 'pu'])
+print(KL_list)
+
 # STEPS TO DO
 """
 1. Get the data

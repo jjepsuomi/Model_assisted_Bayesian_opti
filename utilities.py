@@ -15,8 +15,8 @@ def calculate_histogram_distances(data_sources=None, num_of_bins=30, legend_labe
     # Calculate densities
     densities = []
     for data in flattened_data:
-        print("NOW", data)
-        print(bins)
+        #print("NOW", data)
+        #print(bins)
         density, _ = np.histogram(data, bins=bins, density=True)
         density[density == 0] = 1e-20
         densities.append(density)
