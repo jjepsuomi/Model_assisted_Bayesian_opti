@@ -24,15 +24,12 @@ class BOsampler:
                  y=None,
                  y_noise_params=None,
                  normalize_data=True,
-                 cv_folds=5,
-                 sample_size=5):
-        assert sample_size <= y.size and cv_folds <= y.size
+                 cv_folds=5):
         self.hyperparam_grid = hyperparam_grid # dictionary of model hyperparameters, including kernels.
         self.y_noise_params = y_noise_params
         self.y_noise = None
         self.X = self.check_2d_format(X) # The input features of the data set provided for the sampler.
         self.y = self.check_2d_format(y)
-        self.sample_size = sample_size
         if self.y_noise_params is not None:
             self.y_noise = np.random.normal(y_noise_params['mean'], y_noise_params['std'], size=self.y.shape)
             self.y = self.y + self.check_2d_format(self.y_noise) # Add noise to the target.
@@ -41,13 +38,13 @@ class BOsampler:
             self.initialize_scaler()
             self.X = self.normalize_x(self.X)
         self.cv_folds = cv_folds
-        self.model = None
-        self.utility_model = None # The utility GPR model solved from utility values and sample x.
-        self.utility_data_x = None
-        self.utility_data_y = None # The estimates values from the utility function based on sample data.
-        random_sample_x, random_sample_y = self.take_sample(sample_size=self.sample_size)
-        self.sample_x = random_sample_x
-        self.sample_y = random_sample_y
+        #self.model = None
+        #self.utility_model = None # The utility GPR model solved from utility values and sample x.
+        #self.utility_data_x = None
+        #self.utility_data_y = None # The estimates values from the utility function based on sample data.
+        #random_sample_x, random_sample_y = self.take_sample(sample_size=self.sample_size)
+        #self.sample_x = random_sample_x
+        #self.sample_y = random_sample_y
 
 
 
@@ -76,7 +73,7 @@ class BOsampler:
         if self.scaler is not None:
             return self.scaler.transform(X=x)
         else:
-            return None
+            return x
 
     def inverted_lower_confidence_bound(y_mean=0, y_std=0, l=0.2):
         return l*y_std - y_mean
@@ -335,6 +332,22 @@ class BOsampler:
                 print(KL_divergence)
                 KL_list[sampling_iteration_idx, sampling_method_idx] = KL_divergence[1]
         return KL_list
+    
+    def plot_target_function(self):
+        fig = plt.figure(figsize=(6, 6))
+        plt.ion()
+        plt.show()
+        plt.plot(self.X.ravel(), self.y, label='target function', color='blue', linestyle='--')
+        plt.xlabel('Explanatory variable value')
+        plt.ylabel('Function value')
+        #plt.gca().set_aspect('equal')
+        plt.ylim(-22, 20)  # Replace these values with your desired y-range
+        plt.grid(True)
+        plt.title('Target function plot')
+        plt.legend()
+        plt.tight_layout()  # Automatically adjusts spacing
+        plt.pause(1)
+        
             
 
 

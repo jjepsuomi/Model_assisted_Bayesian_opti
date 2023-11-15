@@ -44,6 +44,47 @@ def calculate_histogram_distances(data_sources=None, num_of_bins=30, legend_labe
 
     return bins, densities, KL_divergence
 
+
+"""
+Container for making sure that we deal with 2D data. 
+ """
+def check_2d_format(arr):
+    arr = np.array(arr)
+    # Check if the input is already 2D (n,m)
+    if len(arr.shape) == 2:
+        return arr  # Do nothing if it's already 2D
+    # If it's 1D (n,), convert it to (n,1)
+    elif len(arr.shape) == 1:
+        return arr.reshape(-1, 1)
+
+"""
+Gaussian function.
+"""
+def gaussian(mean=0, std=1, input_x=0):
+    gaussian_value = np.exp(-(input_x - mean)**2 / (2 * std**2))
+    return gaussian_value
+
+"""
+The true function f(x)=y.
+"""
+def true_function(input_x=0):
+    true_function_values = 0.1*input_x + input_x * np.sin(input_x) \
+    + gaussian(5.7, 1, input_x) \
+    - 2*gaussian(-8, 2, input_x) \
+    - gaussian(8, 0.8, input_x) \
+    - 5*gaussian(-7.5, 1, input_x) \
+    - 3.7*gaussian(-15,2,input_x) \
+    - 2*gaussian(-11,2,input_x) \
+    - 10*gaussian(-14,1,input_x) \
+    + 5*gaussian(-17.5, 3, input_x) \
+    - 15*gaussian(-20,5,input_x) \
+    + 15*gaussian(-15,2,input_x) \
+    + 2*gaussian(-18,1,input_x) \
+    - 0.5*gaussian(-15,1,input_x) \
+    + np.cos(input_x*2)
+    return true_function_values
+
+
 if __name__ == "__main__":
     
     np.random.seed(42)
