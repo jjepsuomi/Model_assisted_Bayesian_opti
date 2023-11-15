@@ -28,7 +28,7 @@ print(f'New shape of y is: {y.shape}')
 
 # Define the hyperparameter grid
 param_grid = {
-    'kernel': [RBF(length_scale=l) for l in np.arange(0.5, 3.25, 0.25)],
+    'kernel': [RBF(length_scale=l) for l in np.arange(1, 4, 1)],
     'alpha': [np.power(10.0, -x) for x in np.arange(1, 3, 1)],
     'n_restarts_optimizer': [n_restarts for n_restarts in np.arange(1, 10, 1)],
 }
@@ -39,13 +39,13 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        y_noise_params={'mean' : 0, 'std' : 1e-5},
                        normalize_data=True,
                        cv_folds=4)
-bo_sampler.plot_target_function()
-KL_list = bo_sampler.perform_sampling_comparison(sample_count=15, sampling_iterations=5, sampling_method_list=['srs', 'pu'])
-print(KL_list)
+#bo_sampler.plot_target_function()
+sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=15, sampling_iterations=5, sampling_method_list=['srs', 'pu'])
+print(sampling_data_container)
 # Plotting
 plt.figure()  # This line creates a new figure
-plt.plot(KL_list[:,0], color='blue', label='SRS')
-plt.plot(KL_list[:,1], color='red', label='BO')
+plt.plot(sampling_data_container['srs']['KLD'], color='blue', label='SRS')
+plt.plot(sampling_data_container['pu']['KLD'], color='red', label='BO')
 
 # Adding legends
 plt.legend()

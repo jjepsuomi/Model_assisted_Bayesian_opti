@@ -287,51 +287,65 @@ class BOsampler:
 
     """
     Do data sampling using the BO-sampling and compare against SRS sampling.
+    'sample_count' = How many samples to take per iteration
+    'sampling_iterations' = How many times to perform the sampling
+    'sampling_method_list' = What methods to use for sampling
     """
-    def perform_sampling_comparison(self, sample_count=1, sampling_iterations=1, sampling_method_list=['pu']):
+    def perform_sampling_comparison(self, 
+                                    sample_count=1, 
+                                    prior_sample_count=50,
+                                    sampling_iterations=1, 
+                                    sampling_method_list=['pu']):
         # Step 1: Get initial random sample from the whole population --> the prior data set.
-        inclusion_probabilities = None
-        remaining_population_X, remaining_population_y = self.X, self.y
-        #prior_X, prior_y = np.empty((0, self.X.shape[1])), np.empty((0, 1))
-        prior_X, prior_y, prior_remaining_population_X, prior_remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
-                                                                                                                    population_y=remaining_population_y, 
-                                                                                                                    inclusion_probabilities=None, 
-                                                                                                                    sample_count=sample_count)
-        KL_list = np.zeros(shape=(sampling_iterations, len(sampling_method_list)))
-        for sampling_method_idx, sampling_method in enumerate(sampling_method_list):
-            sample_X, sample_y = copy.deepcopy(prior_X), copy.deepcopy(prior_y) # The current sample
-            remaining_population_X, remaining_population_y = copy.deepcopy(prior_remaining_population_X), copy.deepcopy(prior_remaining_population_y) # The current sample
-            new_sample_X, new_sample_y = np.empty((0, self.X.shape[1])), np.empty((0, 1)) # Sample to be added.
-            for sampling_iteration_idx in range(sampling_iterations): # How many times to perform the sampling
-                print(f'Doing sampling iteration {sampling_iteration_idx+1}/{sampling_iterations} for: {sampling_method}')
-                if sample_count > remaining_population_y.size:
-                    sample_count = remaining_population_y.size
-                if sampling_method == 'srs':
-                    new_sample_X, new_sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
-                                                                                                                                population_y=remaining_population_y, 
-                                                                                                                                inclusion_probabilities=None, 
-                                                                                                                                sample_count=sample_count)
-                else:
-                    response_gpr_model = self.fit_and_get_gpr_model(sample_X, sample_y)
-                    #_, utility_values, utility_model = self.estimate_utility_function(sample_X, sample_y)
-                    utility_values, utility_model = None,None
-                    inclusion_probabilities = self.get_inclusion_probabilities(X=remaining_population_X, 
-                                                                                method=sampling_method, 
-                                                                                l=0.2,
-                                                                                response_model=response_gpr_model,
-                                                                                utility_model=utility_model,
-                                                                                min_utility=np.min(utility_values))
-                    new_sample_X, new_sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=remaining_population_X, 
-                                                                                                                                population_y=remaining_population_y, 
-                                                                                                                                inclusion_probabilities=inclusion_probabilities, 
-                                                                                                                                sample_count=sample_count)
-                sample_X, sample_y = np.vstack((sample_X, new_sample_X)), np.vstack((sample_y, new_sample_y))
-                sample_response_gpr_model = self.fit_and_get_gpr_model(sample_X, sample_y)
-                y_mean = self.check_2d_format(sample_response_gpr_model.predict(X=remaining_population_X, return_std=False))
-                _, _, KL_divergence = calculate_histogram_distances(data_sources=[self.y, np.vstack((sample_y, y_mean))], num_of_bins=30, legend_labels=['Ref.', 'Sample'])
+        prior_X, prior_y, population_X, population_y = self.sample_by_inclusion_probabilities(population_X=self.X, 
+                                                                                              population_y=self.y, 
+                                                                                              inclusion_probabilities=None, 
+                                                                                              sample_count=prior_sample_count)
+        sampling_data_container = {} # Dictionary to hold all sampling data.
+        sampling_data_container['X'] = copy.deepcopy(self.X)
+        sampling_data_container['y'] = copy.deepcopy(self.y)
+        sampling_data_container['prior_X'] = copy.deepcopy(prior_X)
+        sampling_data_container['prior_y'] = copy.deepcopy(prior_y)
+        for sampling_method in sampling_method_list: # Initialize the container
+            sample_data = {}
+            sample_data['samples_X'] = []
+            sample_data['samples_y'] = []
+            sample_data['KLD'] = []
+            sample_data['population_X'] = copy.deepcopy(population_X)
+            sample_data['population_y'] = copy.deepcopy(population_y)
+            sampling_data_container[sampling_method] = sample_data
+        for sampling_iteration_idx in range(sampling_iterations): # How many times to perform the sampling
+            for sampling_method in sampling_method_list: # Initialize the container
+                print(f'Performing sampling {sampling_iteration_idx+1}/{sampling_iterations} for: {sampling_method}')
+                # Build the current prior data.
+                data_X, data_y = copy.deepcopy(sampling_data_container['prior_X']), copy.deepcopy(sampling_data_container['prior_y'])
+                for subsample_X, subsample_y in zip(sampling_data_container[sampling_method]['samples_X'], sampling_data_container[sampling_method]['samples_y']):
+                    data_X, data_y = np.vstack((data_X, subsample_X)), np.vstack((data_y, subsample_y))
+                # Next, depending on the sampling method, we solve the inclusion probabilities and take the next sample.
+                inclusion_probabilities = None # SRS by default
+                if sampling_method == 'pu': # Predictive uncertainty
+                    response_gpr_model = self.fit_and_get_gpr_model(X=data_X, y=data_y)
+                    inclusion_probabilities = self.get_inclusion_probabilities(X=sampling_data_container[sampling_method]['population_X'], 
+                                                                                method='pu',
+                                                                                response_model=response_gpr_model)
+                # Next, we take the sample and update the data containers accordingly
+                sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=sampling_data_container[sampling_method]['population_X'], 
+                                                                                                                            population_y=sampling_data_container[sampling_method]['population_y'], 
+                                                                                                                            inclusion_probabilities=inclusion_probabilities, 
+                                                                                                                            sample_count=sample_count)
+                sampling_data_container[sampling_method]['samples_X'].append(sample_X)
+                sampling_data_container[sampling_method]['samples_y'].append(sample_y)
+                sampling_data_container[sampling_method]['population_X'] = remaining_population_X
+                sampling_data_container[sampling_method]['population_y'] = remaining_population_y
+                # Now that the sample has been taken, we combine with current data and predict the rest of the population.
+                train_X, train_y = np.vstack((data_X, sample_X)), np.vstack((data_y, sample_y))
+                response_gpr_model = self.fit_and_get_gpr_model(X=train_X, y=train_y)
+                estimated_remaining_y = self.check_2d_format(response_gpr_model.predict(X=remaining_population_X))
+                _, _, KL_divergence = calculate_histogram_distances(data_sources=[self.y, np.vstack((train_y, estimated_remaining_y))], num_of_bins=30)
                 print(KL_divergence)
-                KL_list[sampling_iteration_idx, sampling_method_idx] = KL_divergence[1]
-        return KL_list
+                sampling_data_container[sampling_method]['KLD'].append(KL_divergence[1])
+        return sampling_data_container
+
     
     def plot_target_function(self):
         fig = plt.figure(figsize=(6, 6))
