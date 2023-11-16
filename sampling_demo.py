@@ -15,7 +15,7 @@ from utilities import true_function, check_2d_format
 print(f'***************************\nStarting analysis\n***************************')
 input_x_interval_min = -20
 input_x_interval_max = 20
-number_y_points_from_true_function = 300
+number_y_points_from_true_function = 100
 print(f'Generating true function {number_y_points_from_true_function} points from x-interval: [{input_x_interval_min}, {input_x_interval_max}]')
 x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from_true_function)
 y = true_function(x)
@@ -40,7 +40,7 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        normalize_data=True,
                        cv_folds=4)
 #bo_sampler.plot_target_function()
-sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=15, sampling_iterations=5, sampling_method_list=['srs', 'pu'])
+sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=1, sampling_iterations=10, prior_sample_count=30, sampling_method_list=['srs', 'pu'])
 print(sampling_data_container)
 # Plotting
 plt.figure()  # This line creates a new figure
