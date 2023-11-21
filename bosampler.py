@@ -242,8 +242,8 @@ class BOsampler:
         X = self.check_2d_format(X)
         inclusion_probabilities = None
         # Check for normalization
-        if self.scaler is not None: 
-            X = self.scaler.transform(X)
+        #if self.scaler is not None: 
+        #    X = self.scaler.transform(X)
         # Next step, we solve the acquisition values.
         if method == 'pu': # Predictive uncertainty
             #y_mean, y_std = self.model.predict(X=X, return_std=True)
@@ -251,6 +251,11 @@ class BOsampler:
             _, y_std = response_model.predict(X=X, return_std=True)
             y_std = self.check_2d_format(y_std)
             inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=y_std)
+            #plt.figure(10)
+            #plt.plot(X, y_std, marker='o')
+            #plt.figure(9)
+            #plt.plot(X, inclusion_probabilities, marker='o')
+            #plt.show()
             #assert np.where(y_std == np.max(y_std))[0] == np.where(inclusion_probabilities == np.max(inclusion_probabilities))[0]
             #print(y_std)
         elif method == 'ilcb':
@@ -317,9 +322,9 @@ class BOsampler:
             sample_data['population_X'] = copy.deepcopy(population_X)
             sample_data['population_y'] = copy.deepcopy(population_y)
             sampling_data_container[sampling_method] = sample_data
-        fig, axs = plt.subplots(3, len(sampling_method_list), figsize=(22,16))
+        fig, axs = plt.subplots(3, len(sampling_method_list), figsize=(18,13))
         plt.ion()
-        #plt.show()
+        plt.show()
         for sampling_iteration_idx in range(sampling_iterations): # How many times to perform the sampling
             for sampling_method_idx, sampling_method in enumerate(sampling_method_list): # Initialize the container
                 print(f'Performing sampling {sampling_iteration_idx+1}/{sampling_iterations} for: {sampling_method}')
@@ -327,10 +332,13 @@ class BOsampler:
                 data_X, data_y = copy.deepcopy(sampling_data_container['prior_X']), copy.deepcopy(sampling_data_container['prior_y'])
                 for subsample_X, subsample_y in zip(sampling_data_container[sampling_method]['samples_X'], sampling_data_container[sampling_method]['samples_y']):
                     data_X, data_y = np.vstack((data_X, subsample_X)), np.vstack((data_y, subsample_y))
+                print(f'Model training data sizes are X: {data_X.shape}, y: {data_y.shape}')
                 response_gpr_model = self.fit_and_get_gpr_model(X=data_X, y=data_y)
                 # Next, depending on the sampling method, we solve the inclusion probabilities and take the next sample.
-                inclusion_probabilities = None # SRS by default
+                inclusion_probabilities = None 
                 data_X_probs = np.zeros(data_X.shape)
+                old_x = copy.deepcopy(sampling_data_container[sampling_method]['population_X'])
+                _, ystd = response_gpr_model.predict(X=old_x, return_std=True)
                 if sampling_method == 'srs':
                     inclusion_probabilities = np.full(sampling_data_container[sampling_method]['population_y'].shape, 1.0/float(sampling_data_container[sampling_method]['population_y'].size))
                 elif sampling_method == 'pu': # Predictive uncertainty
@@ -338,9 +346,12 @@ class BOsampler:
                                                                                 method='pu',
                                                                                 response_model=response_gpr_model)
                 data_X_rem = copy.deepcopy(sampling_data_container[sampling_method]['population_X'])
-                prob_X_data = np.vstack((data_X, data_X_rem))
-                prob_rem = np.vstack((data_X_probs, inclusion_probabilities))
+                #prob_X_data = np.vstack((data_X, data_X_rem))
+                prob_X_data = data_X_rem
+                #prob_rem = np.vstack((data_X_probs, inclusion_probabilities))
+                prob_rem = inclusion_probabilities
                 # Next, we take the sample and update the data containers accordingly
+                assert sampling_data_container[sampling_method]['population_y'].size == inclusion_probabilities.size
                 sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=sampling_data_container[sampling_method]['population_X'], 
                                                                                                                             population_y=sampling_data_container[sampling_method]['population_y'], 
                                                                                                                             inclusion_probabilities=inclusion_probabilities, 
@@ -367,22 +378,25 @@ class BOsampler:
                 sorted_indexes = np.argsort(prob_X_data, axis=0)
                 prob_data_X = prob_X_data[sorted_indexes, :].reshape(prob_X_data.shape)
                 prob_vals = prob_rem[sorted_indexes, :].reshape(prob_rem.shape)
+
                 axs[0, sampling_method_idx].cla()
                 axs[0, sampling_method_idx].plot(self.X, self.y, color='blue', linestyle='--') # Plot of the original target function
-                estimated_all_y, estimated_all_std = response_gpr_model.predict(X=self.X, return_std=True)
-                axs[0, sampling_method_idx].plot(self.X, estimated_all_y, label='GPR fit', color='black')
-                axs[0, sampling_method_idx].fill_between(self.X.ravel(), estimated_all_y.ravel() - 1.96*estimated_all_std.ravel(), estimated_all_y.ravel() + 1.96*estimated_all_std.ravel(), color='orange', alpha=0.2, label='95% confidence interval')
+                estimated_all_y, estimated_all_std = response_gpr_model.predict(X=old_x, return_std=True)
+                axs[0, sampling_method_idx].plot(old_x, estimated_all_y, label='GPR fit', color='black')
+                axs[0, sampling_method_idx].fill_between(old_x.ravel(), estimated_all_y.ravel() - 1.96*estimated_all_std.ravel(), estimated_all_y.ravel() + 1.96*estimated_all_std.ravel(), color='orange', alpha=0.2, label='95% confidence interval')
                 axs[0, sampling_method_idx].plot(sorted_data_X, sorted_data_y, marker='o', linestyle='', color='green', markerfacecolor='green', label='Prior data')
                 axs[0, sampling_method_idx].plot(sorted_sample_data_X, sorted_sample_data_y, marker='o', linestyle='', color='red', markerfacecolor='red', label='New sample pints')
-                axs[0, sampling_method_idx].set_title(f'Method: {sampling_method}, iteration: {sampling_iteration_idx}/{sampling_iterations}') 
+                axs[0, sampling_method_idx].set_title(f'Method: {sampling_method}, iteration: {sampling_iteration_idx+1}/{sampling_iterations}') 
                 axs[0, sampling_method_idx].legend()
                 axs[0, sampling_method_idx].grid(True)
+
                 axs[1, sampling_method_idx].cla()
-                axs[1, sampling_method_idx].plot(prob_data_X, prob_vals, marker='o', linestyle='', color='brown', markerfacecolor='yellow', label='Inc.prob')
+                axs[1, sampling_method_idx].plot(prob_data_X, prob_vals, marker='', linestyle='-', color='brown', markerfacecolor='yellow', label='Inc.prob')
                 axs[1, sampling_method_idx].grid(True)
 
                 plt.pause(0.1)
-            plt.savefig(f'fig{sampling_iteration_idx}.png')
+                #plt.show()
+            #plt.savefig(f'fig{sampling_iteration_idx}.png')
         return sampling_data_container
 
     
