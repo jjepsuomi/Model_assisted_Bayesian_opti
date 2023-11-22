@@ -2,6 +2,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import entropy
 
+
+def sort_by_x_values(X=None, y=None):
+    sorted_indexes = np.argsort(X, axis=0)
+    sorted_data_X = X[sorted_indexes, :].reshape(X.shape)
+    sorted_data_y = y[sorted_indexes, :].reshape(y.shape)
+    return sorted_data_X, sorted_data_y
+
+
 def kl_divergence(true_distribution=None, estimated_distribution=None):
     return entropy(true_distribution, estimated_distribution)
 

@@ -15,7 +15,7 @@ from utilities import true_function, check_2d_format
 print(f'***************************\nStarting analysis\n***************************')
 input_x_interval_min = -20
 input_x_interval_max = 20
-number_y_points_from_true_function = 100
+number_y_points_from_true_function = 200
 print(f'Generating true function {number_y_points_from_true_function} points from x-interval: [{input_x_interval_min}, {input_x_interval_max}]')
 x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from_true_function)
 y = true_function(x)
@@ -30,17 +30,25 @@ print(f'New shape of y is: {y.shape}')
 param_grid = {
     'kernel': [RBF(length_scale=l) for l in np.arange(1, 4, 1)],
     'alpha': [np.power(10.0, -x) for x in np.arange(1, 3, 1)],
-    'n_restarts_optimizer': [n_restarts for n_restarts in np.arange(1, 10, 1)],
+    'n_restarts_optimizer': [25],
 }
+#param_grid = {
+#    'kernel': [Matern(length_scale=l, nu=1.5) for l in np.arange(1, 4, 1)],
+#    'alpha': [np.power(10.0, -x) for x in np.arange(1, 3, 1)],
+#    'n_restarts_optimizer': [50],
+#}
 
 bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        X=x,
                        y=y,
                        y_noise_params={'mean' : 0, 'std' : 1e-5},
                        normalize_data=True,
-                       cv_folds=4)
+                       cv_folds=5)
 #bo_sampler.plot_target_function()
-sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=1, sampling_iterations=10, prior_sample_count=30, sampling_method_list=['srs', 'pu'])
+sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=1, 
+                                                                 sampling_iterations=20, 
+                                                                 prior_sample_count=12, 
+                                                                 sampling_method_list=['srs', 'pu', 'ei'])
 print(sampling_data_container)
 # Plotting
 plt.figure()  # This line creates a new figure
