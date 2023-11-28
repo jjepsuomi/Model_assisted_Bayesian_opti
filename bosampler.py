@@ -405,7 +405,6 @@ class BOsampler:
                 #axs[1, sampling_method_idx].legend()
                 if sampling_method_idx == 0:
                     axs[1, sampling_method_idx].set_ylabel(f'Inclusion probability')
-
                 axs[2, sampling_method_idx].cla()
                 axs[2, sampling_method_idx].plot(sampling_data_container[sampling_method]['KLD'], marker='o', linestyle='-', markerfacecolor='orange', color='blue', label='KL-distance')
                 axs[2, sampling_method_idx].grid(True)
@@ -413,7 +412,6 @@ class BOsampler:
                 if sampling_method_idx == 0:
                     axs[2, sampling_method_idx].set_ylabel(f'KL-distance')
                 KL_list += list(sampling_data_container[sampling_method]['KLD'])
-
                 axs[3, sampling_method_idx].cla()
                 axs[3, sampling_method_idx].bar(bins[:-1], densities[0], width=bins[1] - bins[0], alpha=0.5, label='True distribution', color='blue')
                 axs[3, sampling_method_idx].bar(bins[:-1], densities[1], width=bins[1] - bins[0], alpha=0.5, label='Estimated distribution', color='green')

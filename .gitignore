@@ -1,2 +1,5 @@
 /.conda
 /expected_improvement.py
+data/field_data.csv
+data/format_description_FIN.doc
+data/RS_features.csv
