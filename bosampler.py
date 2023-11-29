@@ -369,18 +369,8 @@ class BOsampler:
                 """
                 Dynamic visualization of the sampling
                 """
-                #sorted_indexes = np.argsort(data_X, axis=0)
-                #sorted_data_X = data_X[sorted_indexes, :].reshape(data_X.shape)
-                #sorted_data_y = data_y[sorted_indexes, :].reshape(data_y.shape)
                 sorted_data_X, sorted_data_y = sort_by_x_values(data_X, data_y)
                 sorted_sample_data_X, sorted_sample_data_y = sort_by_x_values(sample_X, sample_y)
-                #sorted_indexes = np.argsort(sample_X, axis=0)
-                #sorted_sample_data_X = sample_X[sorted_indexes, :].reshape(sample_X.shape)
-                #sorted_sample_data_y = sample_y[sorted_indexes, :].reshape(sample_y.shape)
-                #sorted_indexes = np.argsort(prob_X_data, axis=0)
-                #prob_data_X = prob_X_data[sorted_indexes, :].reshape(prob_X_data.shape)
-                #prob_vals = prob_rem[sorted_indexes, :].reshape(prob_rem.shape)
-
                 axs[0, sampling_method_idx].cla()
                 axs[0, sampling_method_idx].plot(self.X, self.y, color='blue', linestyle='--') # Plot of the original target function
                 

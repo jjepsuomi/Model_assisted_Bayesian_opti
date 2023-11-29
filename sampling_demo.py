@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import bosampler
 import importlib
 importlib.reload(bosampler)
@@ -26,6 +27,17 @@ print(f'New shape of x is: {x.shape}')
 print(f'New shape of y is: {y.shape}')
 
 
+field_data = pd.read_csv('./data/field_data.csv', sep=';')
+RS_data = pd.read_csv('./data/RS_features.csv', sep=';')
+combined_data = pd.merge(field_data, RS_data, on='id', how='left')
+#combined_data.to_csv('a.csv', sep=';')
+data_features = ['h0f', 'h5f', 'h10f', 'h20f', 'h30f', 'h40f','h50f', 'h60f', 'h70f', 'h80f', 'h85f', 'h90f',	'h95f',	'h100f', 'vegf', 'h_mean', 'vkph_ka']
+data_set = combined_data[data_features].dropna()
+#data_set.to_csv('data_set.csv', sep=';')
+data_set_numpy = data_set.values
+x = data_set_numpy[:,:-1]
+y = data_set_numpy[:,-1]
+
 # Define the hyperparameter grid
 param_grid = {
     'kernel': [RBF(length_scale=l) for l in np.arange(1, 4, 1)],
@@ -45,7 +57,7 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        normalize_data=True,
                        cv_folds=5)
 #bo_sampler.plot_target_function()
-sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=1, sampling_iterations=10, prior_sample_count=30, sampling_method_list=['srs', 'pu', 'ei'])
+sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=20, sampling_iterations=10, prior_sample_count=300, sampling_method_list=['srs', 'pu'])
 print(sampling_data_container)
 # Plotting
 plt.figure()  # This line creates a new figure
