@@ -19,12 +19,12 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 class BOsampler:
     # Constructor method (initialization)
     def __init__(self, 
-                 hyperparam_grid=None,
-                 X=None,
-                 y=None,
-                 y_noise_params=None,
-                 normalize_data=True,
-                 cv_folds=5):
+                 hyperparam_grid=None, # The parameter grid for optimizing the GPR model.
+                 X=None, # The input features, assumed to be of shape (n,m)
+                 y=None, # The output data, assumed to be of shape (n,) or (n,1)
+                 y_noise_params=None, # Noide parameter, if not-None, noise will be added to y.
+                 normalize_data=True, # Should the input data be standardized?
+                 cv_folds=5): # How many CV folds to use in performance evaluation.
         self.hyperparam_grid = hyperparam_grid # dictionary of model hyperparameters, including kernels.
         self.y_noise_params = y_noise_params
         self.y_noise = None
