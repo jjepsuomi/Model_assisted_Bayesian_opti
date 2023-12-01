@@ -38,15 +38,17 @@ class BOsampler:
             self.initialize_scaler()
             self.X = self.normalize_x(self.X)
         self.cv_folds = cv_folds
-        #self.model = None
-        #self.utility_model = None # The utility GPR model solved from utility values and sample x.
-        #self.utility_data_x = None
-        #self.utility_data_y = None # The estimates values from the utility function based on sample data.
-        #random_sample_x, random_sample_y = self.take_sample(sample_size=self.sample_size)
-        #self.sample_x = random_sample_x
-        #self.sample_y = random_sample_y
 
-
+    """
+    Get and return a random sample from the X,y data.
+    """
+    def take_sample(self, sample_size=1):
+        # Take a random sample without replacement
+        index_list = np.arange(0, self.y.size)
+        random_sample_indices = np.random.choice(index_list, sample_size, replace=False)
+        random_sample_x = self.check_2d_format(self.X[random_sample_indices, :])
+        random_sample_y = self.check_2d_format(self.y[random_sample_indices, 0])
+        return random_sample_x, random_sample_y
 
     """
     Container for making sure that we deal with 2D data. 
@@ -75,57 +77,13 @@ class BOsampler:
         else:
             return x
 
-    def inverted_lower_confidence_bound(self, y_mean=0, y_std=0, l=0.2):
-        return l*y_std - y_mean
-    
     def optimize_gpr_model(self, X=None, y=None):
         gpr = GaussianProcessRegressor()
         grid_search = GridSearchCV(gpr, self.hyperparam_grid, cv=self.cv_folds)
         grid_search.fit(X, y)
-        best_params = grid_search.best_params_
         best_estimator = grid_search.best_estimator_
         return best_estimator
-        #y_pred = best_estimator.predict(X)
-
-    """
-    Fit GPR model to the sample data.
-    """
-    def fit_response_gpr_model(self):
-        self.model = self.optimize_gpr_model(X=self.sample_x, y=self.sample_y)
-
-    """
-    Fit GPR model to the given data.
-    """
-    def fit_and_get_gpr_model(self, X, y):
-        return self.optimize_gpr_model(X=X, y=y)
-
-
-    """
-    Get and return a random sample from the X,y data and set them to object attributes immediately.
-    """
-    def set_sample(self, sample_size=1):
-        # Take a random sample without replacement
-        index_list = np.arange(0, self.y.size)
-        random_sample_indices = np.random.choice(index_list, sample_size, replace=False)
-        random_sample_x = self.check_2d_format(self.X[random_sample_indices, :])
-        random_sample_y = self.check_2d_format(self.y[random_sample_indices, 0])
-        self.sample_x = random_sample_x
-        self.sample_y = random_sample_y
     
-
-    """
-    Get and return a random sample from the X,y data.
-    """
-    def take_sample(self, sample_size=1):
-        # Take a random sample without replacement
-        index_list = np.arange(0, self.y.size)
-        random_sample_indices = np.random.choice(index_list, sample_size, replace=False)
-        random_sample_x = self.check_2d_format(self.X[random_sample_indices, :])
-        random_sample_y = self.check_2d_format(self.y[random_sample_indices, 0])
-        return random_sample_x, random_sample_y
-    
-
-
     """
     Calculate utility values and corresponding GPR model.
     """
@@ -134,15 +92,13 @@ class BOsampler:
         utility_model = self.optimize_gpr_model(X=X, y=utility_values)
         return X, utility_values, utility_model
 
-
     """
-    Evaluate sample point utilities.
+    Evaluate sample point utilities using cross-validation.
     """
     def evaluate_single_point_impact(self, x_data=None, y_data=None, nfolds=5):
         x_data = self.check_2d_format(x_data)
         y_data = self.check_2d_format(y_data)
         loo = LeaveOneOut()
-        #loo_ind = 1
         point_utility_list = np.zeros(shape=(len(y_data), 1))
         for loo_ind, (inner_data_index, single_point_index) in enumerate(loo.split(x_data)):
             sample_data_x, single_point_x = x_data[inner_data_index, :], x_data[single_point_index, :]
@@ -164,13 +120,19 @@ class BOsampler:
             without_point_residual = without_point_residual / nfolds
             with_point_residual = with_point_residual / nfolds
             point_utility_list[single_point_index] = with_point_residual - without_point_residual
-            #if point_utility_list[single_point_index] < 0:
-            #    print(f'Point {loo_ind+1}/{len(y_data)} addition improved residual by: {point_utility_list[single_point_index][0][0]}')
-            #else:
-            #    print(f'Point {loo_ind+1}/{len(y_data)} addition did not improve residual, but increased: {point_utility_list[single_point_index][0][0]}')
         return self.check_2d_format(point_utility_list) # Return the utility values as 2D-matrix.
                 
 
+    def predictive_uncertainty(self, X=None, response_model=None):
+        _, y_std = response_model.predict(X=X, return_std=True)
+        return self.check_2d_format(y_std)
+
+    """
+    The inverse of LCB acquisition function.
+    """
+    def inverted_lower_confidence_bound(self, y_mean=0, y_std=0, l=0.2):
+        return l*y_std - y_mean
+    
     def expected_improvement(self, x_data, surrogate_model, f_min, var_epsilon):
         mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
         mu, sigma = self.check_2d_format(mu), self.check_2d_format(sigma)
@@ -202,11 +164,6 @@ class BOsampler:
         sei = ei / ei_std
         return sei
 
-    def predictive_uncertainty(x_data, y_mean, y_std):
-        max_std_ind = np.where(y_std == np.max(y_std))[0][0]
-        return x_data[max_std_ind], y_mean[max_std_ind]
-
-
     """
     Minmax-normalization.
     """
@@ -231,28 +188,25 @@ class BOsampler:
                 print(f'There are only two unique acquisition values, setting to 0.2 and 0.8.')
                 normalized_acquisition_values[normalized_acquisition_values == 1] = 0.8
                 normalized_acquisition_values[normalized_acquisition_values == 0] = 0.2 # p € (0, 1)
+        # Make sure there are no 0 and 1 prob. normalized acquisition values.
+        assert len(np.where(normalized_acquisition_values == 0)[0]) == 0
+        assert len(np.where(normalized_acquisition_values == 1)[0]) == 0
         return normalized_acquisition_values
     
     
     def get_inclusion_probabilities(self, 
-                                    X=None, 
-                                    method='pu', 
-                                    l=0.2,
-                                    response_model=None,
-                                    utility_model=None,
-                                    min_utility=None):
+                                    X=None, # X-values for which acquisition values are requested
+                                    method='pu', # Which acquisition type to use
+                                    l=0.2, # Lambda parameter for ILCB
+                                    response_model=None, # Response data model
+                                    utility_model=None, # Utility model
+                                    min_utility=None): # Minimum utility value
         X = self.check_2d_format(X)
         inclusion_probabilities = None
-        # Check for normalization
-        #if self.scaler is not None: 
-        #    X = self.scaler.transform(X)
         # Next step, we solve the acquisition values.
         if method == 'pu': # Predictive uncertainty
-            #y_mean, y_std = self.model.predict(X=X, return_std=True)
-            #y_mean, y_std = self.check_2d_format(y_mean), self.check_2d_format(y_std)
-            _, y_std = response_model.predict(X=X, return_std=True)
-            y_std = self.check_2d_format(y_std)
-            inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=y_std)
+            pu_acquisition_values = self.predictive_uncertainty(X=X, response_model=response_model)
+            inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=pu_acquisition_values)
         elif method == 'ilcb':
             y_mean, y_std = utility_model.predict(X=X, return_std=True)
             y_mean, y_std = self.check_2d_format(y_mean), self.check_2d_format(y_std)
@@ -265,9 +219,9 @@ class BOsampler:
         elif method == 'sei':
             sei_acquisition_values = self.scaled_expected_improvement(X, utility_model, min_utility, 1e-10)
             inclusion_probabilities = self.acquisition_to_inclusion_probs(acquisition_values=sei_acquisition_values)
+        # Make sure next that the probabilities sum to 1.
         inc_prob_sum = np.sum(inclusion_probabilities)
         norm_inc_probs = np.array([inc_prob/float(inc_prob_sum) for inc_prob in inclusion_probabilities])
-        print(norm_inc_probs.shape, X.shape)
         return self.check_2d_format(norm_inc_probs)
 
 
@@ -330,7 +284,7 @@ class BOsampler:
                 for subsample_X, subsample_y in zip(sampling_data_container[sampling_method]['samples_X'], sampling_data_container[sampling_method]['samples_y']):
                     data_X, data_y = np.vstack((data_X, subsample_X)), np.vstack((data_y, subsample_y))
                 print(f'DEBUG: Model training data sizes are X: {data_X.shape}, y: {data_y.shape}')
-                response_gpr_model = self.fit_and_get_gpr_model(X=data_X, y=data_y)
+                response_gpr_model = self.optimize_gpr_model(X=data_X, y=data_y)
                 # Next, depending on the sampling method, we solve the inclusion probabilities and take the next sample.
                 inclusion_probabilities = None 
                 #data_X_probs = np.zeros(data_X.shape)
@@ -362,7 +316,7 @@ class BOsampler:
                 sampling_data_container[sampling_method]['population_y'] = remaining_population_y
                 # Now that the sample has been taken, we combine with current data and predict the rest of the population.
                 train_X, train_y = np.vstack((data_X, sample_X)), np.vstack((data_y, sample_y))
-                response_gpr_model_after_sample = self.fit_and_get_gpr_model(X=train_X, y=train_y)
+                response_gpr_model_after_sample = self.optimize_gpr_model(X=train_X, y=train_y)
                 estimated_remaining_y = self.check_2d_format(response_gpr_model_after_sample.predict(X=remaining_population_X))
                 bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, np.vstack((train_y, estimated_remaining_y))], num_of_bins=30)
                 sampling_data_container[sampling_method]['KLD'].append(KL_divergence[1])
