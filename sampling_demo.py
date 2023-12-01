@@ -57,7 +57,10 @@ bo_sampler = BOsampler(hyperparam_grid=param_grid,
                        normalize_data=True,
                        cv_folds=5)
 #bo_sampler.plot_target_function()
-sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=20, sampling_iterations=10, prior_sample_count=300, sampling_method_list=['srs', 'pu'])
+sampling_data_container = bo_sampler.perform_sampling_comparison(sample_count=500, 
+                                                                 sampling_iterations=1, 
+                                                                 prior_sample_count=100, 
+                                                                 sampling_method_list=['srs', 'pu'])
 print(sampling_data_container)
 # Plotting
 plt.figure()  # This line creates a new figure
