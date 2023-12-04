@@ -23,6 +23,7 @@ time_limit="1-00:00:00"
 mem_per_task="8G"
 cores_per_task=1 # How many cores per task
 number_of_parallel_jobs=10 # This means that 10 CPU cores will perform separate 10 parallel analyses.
+csc_project_id=2004015
 
 
 
@@ -69,6 +70,5 @@ do
 done" > $analysis_directory_root_path$script_name
 
 echo "Finished making Slurm script, launching script..."
-sbatch $analysis_directory_root_path$modeling_script_name
+sbatch $analysis_directory_root_path$script_name
 echo "Script finish, enjoy the ride!"
-fi

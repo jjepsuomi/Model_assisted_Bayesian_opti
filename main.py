@@ -101,7 +101,9 @@ for sampling_analysis_id in range(0, sampling_repeats):
                                                                     prior_sample_count=prior_sample_count, 
                                                                     sampling_method_list=sample_methods)
     analysis_container[sampling_analysis_id] = sampling_data_container
-print(f'Samp')
+dump(analysis_container, f'{results_path}analysis_data_jobid_{job_id}.joblib')
+print(f'Sampling analysis finished! =) Resultd done.')
+
     
 
 
