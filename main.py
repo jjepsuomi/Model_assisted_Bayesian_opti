@@ -76,12 +76,12 @@ y = data_set_numpy[:,-1]
 
 # Define the hyperparameter grid
 param_grid = {
-    'kernel': [RBF(length_scale=l) for l in np.arange(1, 4, 1)],
+    'kernel': [RBF(length_scale=l) for l in [0.1, 0.5, 1.0, 2.0, 5.0]],
     'alpha': [np.power(10.0, -x) for x in np.arange(1, 3, 1)],
     'n_restarts_optimizer': [25],
 }
 #param_grid = {
-#    'kernel': [Matern(length_scale=l, nu=1.5) for l in np.arange(1, 4, 1)],
+#    'kernel': [Matern(length_scale=l, nu=1.5) for l in [0.1, 0.5, 1.0, 2.0, 5.0]],
 #    'alpha': [np.power(10.0, -x) for x in np.arange(1, 3, 1)],
 #    'n_restarts_optimizer': [50],
 #}
