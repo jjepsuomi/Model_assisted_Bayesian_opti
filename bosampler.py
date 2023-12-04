@@ -282,7 +282,7 @@ class BOsampler:
             sample_data['population_y'] = copy.deepcopy(population_y)
             sample_data['mean_true_y'] = []
             sample_data['mean_estimated_y'] = []
-            sample_data['mean_mse'] = []
+            sample_data['MSE'] = []
             sampling_data_container[sampling_method] = sample_data
         fig, axs = None, None
         if self.X.shape[1] <= 1:
@@ -334,7 +334,7 @@ class BOsampler:
                 sampling_data_container[sampling_method]['KLD'].append(KL_divergence[1])
                 sampling_data_container[sampling_method]['mean_true_y'].append(np.mean(self.y))
                 sampling_data_container[sampling_method]['mean_estimated_y'].append(np.mean(estimated_population_y))
-                sampling_data_container[sampling_method]['mean_mse'].append(np.mean((self.y - estimated_population_y) ** 2))
+                sampling_data_container[sampling_method]['MSE'].append(np.mean((self.y - estimated_population_y) ** 2))
                 
                 
                 """
