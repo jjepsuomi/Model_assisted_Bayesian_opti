@@ -10,6 +10,7 @@ from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKern
 from utilities import true_function, check_2d_format
 import sys, getopt
 from joblib import Parallel, delayed, dump, load
+import time
 
 """
 # STEP 1 : Generate a synthetic data set and true function.
@@ -90,6 +91,7 @@ noise_params = None
 analysis_container = {}
 for sampling_analysis_id in range(0, sampling_repeats):
     print(f'Performing sampling {sampling_analysis_id+1}/{sampling_repeats}, ID: {job_id}')
+    t = time.time()
     bo_sampler = BOsampler(hyperparam_grid=param_grid,
                         X=x,
                         y=y,
@@ -101,6 +103,7 @@ for sampling_analysis_id in range(0, sampling_repeats):
                                                                     prior_sample_count=prior_sample_count, 
                                                                     sampling_method_list=sample_methods)
     analysis_container[sampling_analysis_id] = sampling_data_container
+    print(f'Sampling analysis {sampling_analysis_id+1}/{sampling_repeats} took: {time.time()-t} seconds')
 dump(analysis_container, f'{results_path}analysis_data_jobid_{job_id}.joblib')
 print(f'Sampling analysis finished! =) Resultd done.')
 

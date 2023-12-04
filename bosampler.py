@@ -12,6 +12,7 @@ import copy
 from sklearn.model_selection import GridSearchCV
 import random
 from utilities import calculate_histogram_distances, sort_by_x_values
+import time
 # Disable ConvergenceWarnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
@@ -292,6 +293,7 @@ class BOsampler:
         KL_list = []
         for sampling_iteration_idx in range(sampling_iterations): # How many times to perform the sampling
             for sampling_method_idx, sampling_method in enumerate(sampling_method_list): # Initialize the container
+                start_time = time.time()
                 print(f'Performing sampling {sampling_iteration_idx+1}/{sampling_iterations} for: {sampling_method}')
                 # Build the current prior data. Add already sampled data to prior. 
                 data_X, data_y = copy.deepcopy(sampling_data_container['prior_X']), copy.deepcopy(sampling_data_container['prior_y'])
@@ -335,7 +337,7 @@ class BOsampler:
                 sampling_data_container[sampling_method]['mean_true_y'].append(np.mean(self.y))
                 sampling_data_container[sampling_method]['mean_estimated_y'].append(np.mean(estimated_population_y))
                 sampling_data_container[sampling_method]['MSE'].append(np.mean((self.y - estimated_population_y) ** 2))
-                
+                print(f'Sampling iteration took: {time.time()-start_time} seconds.')
                 
                 """
                 Dynamic visualization of the sampling
