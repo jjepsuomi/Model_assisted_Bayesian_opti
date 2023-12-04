@@ -122,7 +122,9 @@ class BOsampler:
             point_utility_list[single_point_index] = with_point_residual - without_point_residual
         return self.check_2d_format(point_utility_list) # Return the utility values as 2D-matrix.
                 
-
+    """
+    The predictive uncertainty acquisition function.
+    """
     def predictive_uncertainty(self, X=None, response_model=None):
         _, y_std = response_model.predict(X=X, return_std=True)
         return self.check_2d_format(y_std)
@@ -133,6 +135,9 @@ class BOsampler:
     def inverted_lower_confidence_bound(self, y_mean=0, y_std=0, l=0.2):
         return l*y_std - y_mean
     
+    """
+    The expected improvement (EI) acquisition function
+    """
     def expected_improvement(self, x_data, surrogate_model, f_min, var_epsilon):
         mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
         mu, sigma = self.check_2d_format(mu), self.check_2d_format(sigma)
@@ -145,6 +150,9 @@ class BOsampler:
         ei = (f_min - mu) * Phi + sigma * phi
         return ei
 
+    """
+    The scaled expected improvement (SEI) acquisition function
+    """
     def scaled_expected_improvement(self, x_data, surrogate_model, f_min, var_epsilon):
         mu, sigma = surrogate_model.predict(X=x_data, return_std=True)  # Get mean and standard deviation from the surrogate model.
         mu, sigma = self.check_2d_format(mu), self.check_2d_format(sigma)
