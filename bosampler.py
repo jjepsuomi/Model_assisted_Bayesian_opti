@@ -102,6 +102,7 @@ class BOsampler:
         loo = LeaveOneOut()
         point_utility_list = np.zeros(shape=(len(y_data), 1))
         for loo_ind, (inner_data_index, single_point_index) in enumerate(loo.split(x_data)):
+            start_time = time.time()
             sample_data_x, single_point_x = x_data[inner_data_index, :], x_data[single_point_index, :]
             sample_data_y, single_point_y = y_data[inner_data_index], y_data[single_point_index]
             kfcv = KFold(n_splits=nfolds, shuffle=True)
@@ -121,6 +122,7 @@ class BOsampler:
             without_point_residual = without_point_residual / nfolds
             with_point_residual = with_point_residual / nfolds
             point_utility_list[single_point_index] = with_point_residual - without_point_residual
+            print(f'Data point {loo_ind+1}/{len(y_data)} utility evaluation took: {time.time()-start_time} seconds')
         return self.check_2d_format(point_utility_list) # Return the utility values as 2D-matrix.
                 
     """
