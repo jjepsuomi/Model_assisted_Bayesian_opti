@@ -88,7 +88,7 @@ param_grid = {
 noise_params = {'mean' : 0, 'std' : 1e-5}
 noise_params = None
 
-analysis_container = {}
+#analysis_container = {}
 for sampling_analysis_id in range(0, sampling_repeats):
     print(f'Performing sampling {sampling_analysis_id+1}/{sampling_repeats}, ID: {job_id}')
     t = time.time()
@@ -102,10 +102,10 @@ for sampling_analysis_id in range(0, sampling_repeats):
                                                                     sampling_iterations=sampling_iterations, 
                                                                     prior_sample_count=prior_sample_count, 
                                                                     sampling_method_list=sample_methods)
-    analysis_container[sampling_analysis_id] = sampling_data_container
+    #analysis_container[sampling_analysis_id] = sampling_data_container
     print(f'Sampling analysis {sampling_analysis_id+1}/{sampling_repeats} took: {time.time()-t} seconds')
-dump(analysis_container, f'{results_path}analysis_data_jobid_{job_id}.joblib')
-print(f'Sampling analysis finished! =) Resultd done.')
+    dump(sampling_data_container, f'{results_path}analysis_data_samplingid_{sampling_analysis_id+1}_jobid_{job_id}.joblib')
+print(f'Sampling analysis finished! =) Results done.')
 
     
 
