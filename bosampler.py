@@ -13,6 +13,7 @@ from sklearn.model_selection import GridSearchCV
 import random
 from utilities import calculate_histogram_distances, sort_by_x_values
 import time
+from utilities import fd_optimal_bins
 # Disable ConvergenceWarnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
