@@ -2,14 +2,51 @@ from joblib import Parallel, delayed, dump, load
 import numpy as np
 import pandas as pd
 import glob
+import matplotlib.pyplot as plt
 
 data_files = glob.glob('./results/*.joblib')
-
-true, srs, bo = [],[], []
+data_files1 = glob.glob('./results/results1/*.joblib')
+data_files = data_files + data_files1
+print(len(data_files))
+srs, pu, ilcb, ei, sei = [],[], [], [], []
 for data_file in data_files:
     data = load(data_file)
-    #print(data)
-    srs.append(data['srs']['mean_estimated_y'])
-    bo.append(data['sei']['mean_estimated_y'])
-    true.append(data['srs']['mean_true_y'])
-print(np.mean(true), np.mean(srs), np.mean(bo))
+    print(data.keys())
+    print(data['srs'].keys())
+    #srs.append(data['srs']['KLD'][0])
+    #pu.append(data['pu']['KLD'][0])
+    #ilcb.append(data['ilcb']['KLD'][0])
+    #ei.append(data['ei']['KLD'][0])
+    #sei.append(data['sei']['KLD'][0])
+    srs.append(np.abs(data['srs']['mean_true_y'][0]-data['srs']['mean_estimated_y'][0]))
+    pu.append(np.abs(data['pu']['mean_true_y'][0]-data['pu']['mean_estimated_y'][0]))
+    ilcb.append(np.abs(data['ilcb']['mean_true_y'][0]-data['ilcb']['mean_estimated_y'][0]))
+    ei.append(np.abs(data['ei']['mean_true_y'][0]-data['ei']['mean_estimated_y'][0]))
+    sei.append(np.abs(data['sei']['mean_true_y'][0]-data['sei']['mean_estimated_y'][0]))
+    #pu.append(data['pu']['KLD'][0])
+    #ilcb.append(data['ilcb']['KLD'][0])
+    #ei.append(data['ei']['KLD'][0])
+    #sei.append(data['sei']['KLD'][0])
+
+print(srs)
+data = [np.array(srs), np.array(pu), np.array(ilcb), np.array(ei), np.array(sei)]
+
+
+# Generating some sample data
+#np.random.seed(10)
+#data = [np.random.normal(0, std, 100) for std in range(1, 4)]
+#print(data[0].shape)
+# Creating the boxplot
+plt.boxplot(data)
+
+# Calculating and plotting the mean line for each boxplot
+#for i, dataset in enumerate(data, start=1):
+#    mean = np.mean(dataset)
+#    plt.axhline(mean, color='r', linestyle='dashed', linewidth=1)
+#    plt.text(i, mean, f'{mean:.2f}', ha='right', va='center', color='r')
+
+plt.xlabel('Data')
+plt.ylabel('Value')
+plt.title('Boxplot with Mean')
+
+plt.show()
