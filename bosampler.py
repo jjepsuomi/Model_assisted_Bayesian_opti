@@ -40,6 +40,8 @@ class BOsampler:
             self.initialize_scaler()
             self.X = self.normalize_x(self.X)
         self.cv_folds = cv_folds
+        self.bins = fd_optimal_bins(self.y)
+        print(f'Number of histogram bins automatically determined as: {self.bins}')
 
     """
     Get and return a random sample from the X,y data.
@@ -342,7 +344,7 @@ class BOsampler:
                 response_gpr_model_after_sample = self.optimize_gpr_model(X=train_X, y=train_y)
                 estimated_remaining_y = self.check_2d_format(response_gpr_model_after_sample.predict(X=remaining_population_X))
                 estimated_population_y = np.vstack((train_y, estimated_remaining_y))
-                bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, estimated_population_y], num_of_bins=30)
+                bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, estimated_population_y], num_of_bins=self.bins)
                 sampling_data_container[sampling_method]['KLD'].append(KL_divergence[1])
                 sampling_data_container[sampling_method]['mean_true_y'].append(np.mean(self.y))
                 sampling_data_container[sampling_method]['mean_estimated_y'].append(np.mean(estimated_population_y))
