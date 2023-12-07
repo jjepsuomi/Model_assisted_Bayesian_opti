@@ -250,10 +250,13 @@ class BOsampler:
         # Extract the sampled data based on the sampled indices
         sampled_X = population_X[sampled_indices, :]
         sampled_y = population_y[sampled_indices]
+        sample_probabilities = None
+        if inclusion_probabilities is not None:
+            sample_probabilities = inclusion_probabilities[sampled_indices]
         # Update the original set by removing the sampled data
         remaining_population_X = population_X[remaining_indices, :]
         remaining_population_y = population_y[remaining_indices]
-        return sampled_X, sampled_y, remaining_population_X, remaining_population_y, 
+        return sampled_X, sampled_y, remaining_population_X, remaining_population_y, sample_probabilities
 
 
     """
@@ -268,7 +271,7 @@ class BOsampler:
                                     sampling_iterations=1, 
                                     sampling_method_list=['pu']):
         # Step 1: Get initial random sample from the whole population --> the prior data set.
-        prior_X, prior_y, population_X, population_y = self.sample_by_inclusion_probabilities(population_X=self.X, 
+        prior_X, prior_y, population_X, population_y, _ = self.sample_by_inclusion_probabilities(population_X=self.X, 
                                                                                               population_y=self.y, 
                                                                                               inclusion_probabilities=None, 
                                                                                               sample_count=prior_sample_count)
@@ -281,6 +284,8 @@ class BOsampler:
             sample_data = {}
             sample_data['samples_X'] = []
             sample_data['samples_y'] = []
+            sample_data['sample_inclusion_probabilities'] = []
+            sample_data['difference_estimator'] = []
             sample_data['KLD'] = []
             sample_data['population_X'] = copy.deepcopy(population_X)
             sample_data['population_y'] = copy.deepcopy(population_y)
@@ -320,7 +325,8 @@ class BOsampler:
                                                                                min_utility=np.min(utility_values))
                 # Next, we take the sample and update the data containers accordingly
                 assert sampling_data_container[sampling_method]['population_y'].size == inclusion_probabilities.size
-                sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=sampling_data_container[sampling_method]['population_X'], 
+                sample_X, sample_y, remaining_population_X, remaining_population_y, sample_probabilities = self.sample_by_inclusion_probabilities(
+                                                                                                                            population_X=sampling_data_container[sampling_method]['population_X'], 
                                                                                                                             population_y=sampling_data_container[sampling_method]['population_y'], 
                                                                                                                             inclusion_probabilities=inclusion_probabilities, 
                                                                                                                             sample_count=sample_count)
@@ -328,6 +334,7 @@ class BOsampler:
                 # Update the sample data and remaining population
                 sampling_data_container[sampling_method]['samples_X'].append(sample_X)
                 sampling_data_container[sampling_method]['samples_y'].append(sample_y)
+                sampling_data_container[sampling_method]['sample_inclusion_probabilities'].append(sample_probabilities)
                 sampling_data_container[sampling_method]['population_X'] = remaining_population_X
                 sampling_data_container[sampling_method]['population_y'] = remaining_population_y
                 # Now that the sample has been taken, we combine with current data and predict the rest of the population.
@@ -340,6 +347,10 @@ class BOsampler:
                 sampling_data_container[sampling_method]['mean_true_y'].append(np.mean(self.y))
                 sampling_data_container[sampling_method]['mean_estimated_y'].append(np.mean(estimated_population_y))
                 sampling_data_container[sampling_method]['MSE'].append(np.mean((self.y - estimated_population_y) ** 2))
+                assert data_y.size + sample_y.size + estimated_remaining_y.size == self.y.size # prior + sample + rest == all
+                estimated_sample_y = self.check_2d_format(response_gpr_model_after_sample.predict(X=sample_X))
+                difference_estimator = np.sum(data_y) + np.sum(estimated_sample_y) + np.sum(estimated_remaining_y) + np.sum((sample_y - estimated_sample_y) / sample_probabilities)
+                sampling_data_container[sampling_method]['difference_estimator'].append(difference_estimator)
                 print(f'Sampling iteration took: {time.time()-start_time} seconds.')
                 
                 """
