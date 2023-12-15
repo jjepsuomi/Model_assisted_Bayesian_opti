@@ -40,6 +40,8 @@ class BOsampler:
             self.initialize_scaler()
             self.X = self.normalize_x(self.X)
         self.cv_folds = cv_folds
+        self.bins = fd_optimal_bins(self.y)
+        print(f'Number of histogram bins automatically determined as: {self.bins}')
 
     """
     Get and return a random sample from the X,y data.
@@ -234,26 +236,36 @@ class BOsampler:
         # Make sure next that the probabilities sum to 1.
         inc_prob_sum = np.sum(inclusion_probabilities)
         norm_inc_probs = np.array([inc_prob/float(inc_prob_sum) for inc_prob in inclusion_probabilities])
-        return self.check_2d_format(norm_inc_probs)
+        return self.check_2d_format(inclusion_probabilities), self.check_2d_format(norm_inc_probs)
 
 
-    def sample_by_inclusion_probabilities(self, population_X=None, population_y=None, inclusion_probabilities=None, sample_count=1):
+    def sample_by_inclusion_probabilities(self, 
+                                          population_X=None, 
+                                          population_y=None, 
+                                          inclusion_probabilities=None,
+                                          normalized_inclusion_probabilities=None, 
+                                          sample_count=1):
         population_X, population_y = self.check_2d_format(population_X), self.check_2d_format(population_y)
         # Create a list of indices representing the population
         index_list = list(range(population_y.size))
         # Take a sample without replacement
-        if inclusion_probabilities is not None:
-            inclusion_probabilities = np.reshape(inclusion_probabilities, newshape=(inclusion_probabilities.size,))
-        sampled_indices = np.random.choice(a=index_list, size=sample_count, replace=False, p=inclusion_probabilities)
+        if normalized_inclusion_probabilities is not None:
+            normalized_inclusion_probabilities = np.reshape(normalized_inclusion_probabilities, newshape=(normalized_inclusion_probabilities.size,))
+        sampled_indices = np.random.choice(a=index_list, size=sample_count, replace=False, p=normalized_inclusion_probabilities)
         # Remove sampled indices from the original set
         remaining_indices = [index for index in index_list if index not in sampled_indices]
         # Extract the sampled data based on the sampled indices
         sampled_X = population_X[sampled_indices, :]
         sampled_y = population_y[sampled_indices]
+        sample_probabilities = None
+        normalized_sample_probabilities = None
+        if normalized_inclusion_probabilities is not None:
+            normalized_sample_probabilities = normalized_inclusion_probabilities[sampled_indices]
+            sample_probabilities = inclusion_probabilities[sampled_indices]
         # Update the original set by removing the sampled data
         remaining_population_X = population_X[remaining_indices, :]
         remaining_population_y = population_y[remaining_indices]
-        return sampled_X, sampled_y, remaining_population_X, remaining_population_y, 
+        return self.check_2d_format(sampled_X), self.check_2d_format(sampled_y), self.check_2d_format(remaining_population_X), self.check_2d_format(remaining_population_y), self.check_2d_format(sample_probabilities), self.check_2d_format(normalized_sample_probabilities)
 
 
     """
@@ -268,7 +280,7 @@ class BOsampler:
                                     sampling_iterations=1, 
                                     sampling_method_list=['pu']):
         # Step 1: Get initial random sample from the whole population --> the prior data set.
-        prior_X, prior_y, population_X, population_y = self.sample_by_inclusion_probabilities(population_X=self.X, 
+        prior_X, prior_y, population_X, population_y, _, _ = self.sample_by_inclusion_probabilities(population_X=self.X, 
                                                                                               population_y=self.y, 
                                                                                               inclusion_probabilities=None, 
                                                                                               sample_count=prior_sample_count)
@@ -281,6 +293,9 @@ class BOsampler:
             sample_data = {}
             sample_data['samples_X'] = []
             sample_data['samples_y'] = []
+            sample_data['sample_inclusion_probabilities'] = []
+            sample_data['normalized_sample_inclusion_probabilities'] = []
+            sample_data['difference_estimator'] = []
             sample_data['KLD'] = []
             sample_data['population_X'] = copy.deepcopy(population_X)
             sample_data['population_y'] = copy.deepcopy(population_y)
@@ -305,29 +320,34 @@ class BOsampler:
                 print(f'DEBUG: Model training data sizes are X: {data_X.shape}, y: {data_y.shape}')
                 response_gpr_model = self.optimize_gpr_model(X=data_X, y=data_y)
                 # Next, depending on the sampling method, we solve the inclusion probabilities and take the next sample.
-                inclusion_probabilities = None 
+                inclusion_probabilities, normalized_inclusion_probabilities = None, None
                 if sampling_method == 'srs': # Same inclusion prob. to all. 
                     inclusion_probabilities = np.full(sampling_data_container[sampling_method]['population_y'].shape, 1.0/float(sampling_data_container[sampling_method]['population_y'].size))
+                    normalized_inclusion_probabilities = inclusion_probabilities
                 elif sampling_method == 'pu': # Predictive uncertainty
-                    inclusion_probabilities = self.get_inclusion_probabilities(X=sampling_data_container[sampling_method]['population_X'], 
+                    inclusion_probabilities, normalized_inclusion_probabilities = self.get_inclusion_probabilities(X=sampling_data_container[sampling_method]['population_X'], 
                                                                                 method='pu',
                                                                                 response_model=response_gpr_model)
                 else: # This assumes ilcb, ei or sei
                     utility_X, utility_values, utility_model = self.estimate_utility_function(X=data_X, y=data_y)
-                    inclusion_probabilities = self.get_inclusion_probabilities(X=sampling_data_container[sampling_method]['population_X'], 
+                    inclusion_probabilities, normalized_inclusion_probabilities = self.get_inclusion_probabilities(X=sampling_data_container[sampling_method]['population_X'], 
                                                                                method=sampling_method,
                                                                                utility_model=utility_model,
                                                                                min_utility=np.min(utility_values))
                 # Next, we take the sample and update the data containers accordingly
-                assert sampling_data_container[sampling_method]['population_y'].size == inclusion_probabilities.size
-                sample_X, sample_y, remaining_population_X, remaining_population_y = self.sample_by_inclusion_probabilities(population_X=sampling_data_container[sampling_method]['population_X'], 
-                                                                                                                            population_y=sampling_data_container[sampling_method]['population_y'], 
-                                                                                                                            inclusion_probabilities=inclusion_probabilities, 
-                                                                                                                            sample_count=sample_count)
+                assert sampling_data_container[sampling_method]['population_y'].size == inclusion_probabilities.size == normalized_inclusion_probabilities.size
+                sample_X, sample_y, remaining_population_X, remaining_population_y, sample_probabilities, normalized_sample_probabilities = self.sample_by_inclusion_probabilities(
+                                                                                                                                            population_X=sampling_data_container[sampling_method]['population_X'], 
+                                                                                                                                            population_y=sampling_data_container[sampling_method]['population_y'], 
+                                                                                                                                            inclusion_probabilities=inclusion_probabilities, 
+                                                                                                                                            normalized_inclusion_probabilities=normalized_inclusion_probabilities,
+                                                                                                                                            sample_count=sample_count)
                 to_be_sampled_x = copy.deepcopy(sampling_data_container[sampling_method]['population_X']) # Save old X for plotting purpose
                 # Update the sample data and remaining population
                 sampling_data_container[sampling_method]['samples_X'].append(sample_X)
                 sampling_data_container[sampling_method]['samples_y'].append(sample_y)
+                sampling_data_container[sampling_method]['sample_inclusion_probabilities'].append(sample_probabilities)
+                sampling_data_container[sampling_method]['normalized_sample_inclusion_probabilities'].append(normalized_sample_probabilities)
                 sampling_data_container[sampling_method]['population_X'] = remaining_population_X
                 sampling_data_container[sampling_method]['population_y'] = remaining_population_y
                 # Now that the sample has been taken, we combine with current data and predict the rest of the population.
@@ -335,11 +355,15 @@ class BOsampler:
                 response_gpr_model_after_sample = self.optimize_gpr_model(X=train_X, y=train_y)
                 estimated_remaining_y = self.check_2d_format(response_gpr_model_after_sample.predict(X=remaining_population_X))
                 estimated_population_y = np.vstack((train_y, estimated_remaining_y))
-                bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, estimated_population_y], num_of_bins=30)
+                bins, densities, KL_divergence = calculate_histogram_distances(data_sources=[self.y, estimated_population_y], num_of_bins=self.bins)
                 sampling_data_container[sampling_method]['KLD'].append(KL_divergence[1])
                 sampling_data_container[sampling_method]['mean_true_y'].append(np.mean(self.y))
                 sampling_data_container[sampling_method]['mean_estimated_y'].append(np.mean(estimated_population_y))
                 sampling_data_container[sampling_method]['MSE'].append(np.mean((self.y - estimated_population_y) ** 2))
+                assert data_y.size + sample_y.size + estimated_remaining_y.size == self.y.size # prior + sample + rest == all
+                estimated_sample_y = self.check_2d_format(response_gpr_model_after_sample.predict(X=sample_X))
+                difference_estimator = np.sum(data_y) + np.sum(estimated_sample_y) + np.sum(estimated_remaining_y) + np.sum((sample_y - estimated_sample_y) / sample_probabilities)
+                sampling_data_container[sampling_method]['difference_estimator'].append(difference_estimator)
                 print(f'Sampling iteration took: {time.time()-start_time} seconds.')
                 
                 """

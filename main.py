@@ -30,8 +30,8 @@ print(f'New shape of y is: {y.shape}')
 
 print(f'Starting sampling analysis...')
 
-sample_methods = None
-sampling_repeats = None
+sample_methods = ['srs']
+sampling_repeats = 1
 prior_sample_count = 100
 sample_count = 50
 sampling_iterations = 1
