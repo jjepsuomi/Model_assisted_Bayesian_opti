@@ -7,3 +7,6 @@ a.csv
 results/*
 analysis_results/*
 old/*
+total_de_difference.png
+y_mean_difference.png
+KLD.png

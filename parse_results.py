@@ -3,57 +3,88 @@ import numpy as np
 import pandas as pd
 import glob
 import matplotlib.pyplot as plt
+import time
 
-data_files = glob.glob('./results/*.joblib')
-data_files1 = glob.glob('./results/results1/*.joblib')
-data_files = data_files + data_files1
-print(len(data_files))
-srs, pu, ilcb, ei, sei = [],[], [], [], []
-for data_file in data_files:
+
+
+
+data_files = glob.glob('./analysis_results/*/results/*.joblib')
+#data_files = data_files[0:100]
+file_count = len(data_files)
+method_list = ['srs', 'pu', 'ilcb', 'ei', 'sei']
+result_holder = {}
+for method in method_list:
+    result_holder[method] ={}
+    result_holder[method]['total_de_difference'] = np.zeros((file_count, 1))
+    result_holder[method]['y_mean_difference'] = np.zeros((file_count, 1))
+    result_holder[method]['KLD'] = np.zeros((file_count, 1))
+
+
+
+example_data = load(data_files[0])
+print(f'The data main keys: {example_data.keys()}')
+print(f'Single method keys are: {example_data["srs"].keys()}')
+print(f'There in total {file_count} sampling results to be processed.')
+y_total = np.sum(example_data['y'])
+
+for idx, data_file in enumerate(data_files):
+    print(f'Processing data file: {idx}/{file_count}')
     data = load(data_file)
-    #print(data.keys())
-    #print(data['srs'].keys())
-    #srs.append(data['srs']['KLD'][0])
-    #pu.append(data['pu']['KLD'][0])
-    #ilcb.append(data['ilcb']['KLD'][0])
-    #ei.append(data['ei']['KLD'][0])
-    #sei.append(data['sei']['KLD'][0])
-    srs.append(np.abs(data['srs']['mean_true_y'][0]-data['srs']['mean_estimated_y'][0]))
-    pu.append(np.abs(data['pu']['mean_true_y'][0]-data['pu']['mean_estimated_y'][0]))
-    ilcb.append(np.abs(data['ilcb']['mean_true_y'][0]-data['ilcb']['mean_estimated_y'][0]))
-    ei.append(np.abs(data['ei']['mean_true_y'][0]-data['ei']['mean_estimated_y'][0]))
-    sei.append(np.abs(data['sei']['mean_true_y'][0]-data['sei']['mean_estimated_y'][0]))
-    #pu.append(data['pu']['KLD'][0])
-    #ilcb.append(data['ilcb']['KLD'][0])
-    #ei.append(data['ei']['KLD'][0])
-    #sei.append(data['sei']['KLD'][0])
+    for method in result_holder.keys():
+        total_diff_val = np.abs(y_total - data[method]['difference_estimator'][0])
+        if total_diff_val < 1e15:
+            result_holder[method]['total_de_difference'][idx,0] = total_diff_val
+        else:
+            result_holder[method]['total_de_difference'][idx,0] = np.nan
+        mean_diff_val = np.abs(data[method]['mean_true_y'][0] - data[method]['mean_estimated_y'][0])
+        result_holder[method]['y_mean_difference'][idx,0] = mean_diff_val
+        result_holder[method]['KLD'][idx,0] = data[method]['KLD'][0]
 
-print(srs)
-data = [np.array(srs), np.array(pu), np.array(ilcb), np.array(ei), np.array(sei)]
 
-print(data)
-# Generating some sample data
-#np.random.seed(10)
-#data = [np.random.normal(0, std, 100) for std in range(1, 4)]
-#print(data[0].shape)
-# Creating the boxplot
-plt.figure(figsize=(8, 6))
-plt.boxplot(data, meanline=True, showmeans=True)
+plot_data = {}
+plot_data['total_de_difference'] = np.empty((file_count, 0))
+plot_data['y_mean_difference'] = np.empty((file_count, 0))
+plot_data['KLD'] = np.empty((file_count, 0))
+# Concatenating the arrays using a loop
+for metric in plot_data.keys():
+    for method in result_holder.keys():
+        metric_array = result_holder[method][metric]
+        """
+        contains_nan = np.isnan(metric_array).any()
+        if contains_nan:
+            print(f"The method {method} array contains NaN values.")
+        else:
+            print(f"The method {method} array does not contain NaN values.")
+        """
+        plot_data[metric] = np.concatenate((plot_data[metric], metric_array), axis=1)
+    # Count number of rows with NaN values
+    rows_with_nan = np.isnan(plot_data[metric]).any(axis=1)
+    num_rows_with_nan = np.sum(rows_with_nan)
+    print(f'Number of rows with NaN values in metric {metric} is {num_rows_with_nan}')
+    # Remove rows with NaN values
+    plot_data[metric] = plot_data[metric][~rows_with_nan]
+    #plot_data[metric] = plot_data[metric] / float(plot_data[metric].shape[0])
 
-# Calculating and plotting the mean line for each boxplot
-#for i, dataset in enumerate(data, start=1):
-#    mean = np.mean(dataset)
-#    plt.axhline(mean, color='r', linestyle='dashed', linewidth=1)
-#    plt.text(i + 0.1, mean, f'Mean: {mean:.2f}', ha='left', va='center', color='r', fontsize=8)
 
-# Calculating and plotting the mean line for each boxplot
-#for i, dataset in enumerate(data, start=1):
-#    mean = np.mean(dataset)
-#    plt.axhline(mean, color='r', linestyle='dashed', linewidth=1)
-#    plt.text(i, mean, f'{mean:.2f}', ha='right', va='center', color='r')
-
-plt.xlabel('Data')
-plt.ylabel('Value')
-plt.title('Boxplot with Mean')
-
-plt.show()
+# Create boxplot
+for metric in plot_data.keys():
+    title_label = ''
+    y_label = ''
+    if metric == 'total_de_difference':
+        title_label = f'Absolute difference between\npopulation total and difference estimator\n{plot_data[metric].shape[0]} sampling simulations'
+        y_label = 'Absolute total difference'
+    elif metric == 'y_mean_difference':
+        title_label = f'Absolute difference between\npopulation mean and estimated mean\n{plot_data[metric].shape[0]} sampling simulations'
+        y_label = 'Absolute pop. mean difference'
+    elif metric == 'KLD':
+        title_label = f'Kullback-Leibler divergence between\ntrue and estimated population distribution\n{plot_data[metric].shape[0]} sampling simulations'
+        y_label = 'KL-divergence'
+    plt.figure(figsize=(8, 6))
+    plt.boxplot(plot_data[metric], meanline=True, showmeans=False, showfliers=False)
+    plt.xlabel('Sampling design')
+    plt.ylabel(y_label)
+    plt.title(title_label)
+    plt.grid(True)
+    plt.xticks(np.arange(1, 6), [word.upper() for word in method_list])  # Adjust labels accordingly
+    plt.savefig(f'{metric}.png', dpi=600)
+    #plt.show()
