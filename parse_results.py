@@ -4,12 +4,14 @@ import pandas as pd
 import glob
 import matplotlib.pyplot as plt
 import time
+import os
 
 
 
-
-data_files = glob.glob('./analysis_results/*/results/*.joblib')
+#data_files = glob.glob('./analysis_results/*/results/*.joblib')
 #data_files = data_files[0:100]
+
+data_files = glob.glob('./new_data/*/*.joblib')
 file_count = len(data_files)
 method_list = ['srs', 'pu', 'ilcb', 'ei', 'sei']
 result_holder = {}
@@ -32,7 +34,7 @@ for idx, data_file in enumerate(data_files):
     data = load(data_file)
     for method in result_holder.keys():
         total_diff_val = np.abs(y_total - data[method]['difference_estimator'][0])
-        if total_diff_val < 1e15:
+        if total_diff_val < 1e8:
             result_holder[method]['total_de_difference'][idx,0] = total_diff_val
         else:
             result_holder[method]['total_de_difference'][idx,0] = np.nan
