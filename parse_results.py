@@ -6,12 +6,17 @@ import matplotlib.pyplot as plt
 import time
 import os
 
+project_folder = os.getcwd()
+data_source_directory = os.getcwd()
+#data_source_directory = "G:\\"
 
-
-#data_files = glob.glob('./analysis_results/*/results/*.joblib')
+print(f'Project code folder at: {project_folder}')
+print(f'Searching data from location: {data_source_directory}')
+os.chdir(data_source_directory)
+data_files = glob.glob('./analysis_results/*/results/*.joblib')
+#data_files = glob.glob('./newest_data/*/results/*.joblib')
 #data_files = data_files[0:100]
 
-data_files = glob.glob('./new_data/*/*.joblib')
 file_count = len(data_files)
 method_list = ['srs', 'pu', 'ilcb', 'ei', 'sei']
 result_holder = {}
@@ -67,19 +72,20 @@ for metric in plot_data.keys():
     plot_data[metric] = plot_data[metric][~rows_with_nan]
     #plot_data[metric] = plot_data[metric] / float(plot_data[metric].shape[0])
 
-
+print(f'Changing folder back to project folder...')
+os.chdir(project_folder)
 # Create boxplot
 for metric in plot_data.keys():
     title_label = ''
     y_label = ''
     if metric == 'total_de_difference':
-        title_label = f'Absolute difference between\npopulation total and difference estimator\n{plot_data[metric].shape[0]} sampling simulations'
-        y_label = 'Absolute total difference'
+        title_label = f'Absolute difference between true and DE-estimated population total'
+        y_label = 'Absolute population total difference'
     elif metric == 'y_mean_difference':
-        title_label = f'Absolute difference between\npopulation mean and estimated mean\n{plot_data[metric].shape[0]} sampling simulations'
-        y_label = 'Absolute pop. mean difference'
+        title_label = f'Absolute difference between true and estimated population mean'
+        y_label = 'Absolute population mean difference'
     elif metric == 'KLD':
-        title_label = f'Kullback-Leibler divergence between\ntrue and estimated population distribution\n{plot_data[metric].shape[0]} sampling simulations'
+        title_label = f'KL-divergence between true and estimated population distribution'
         y_label = 'KL-divergence'
     plt.figure(figsize=(8, 6))
     plt.boxplot(plot_data[metric], meanline=True, showmeans=False, showfliers=False)
@@ -87,6 +93,7 @@ for metric in plot_data.keys():
     plt.ylabel(y_label)
     plt.title(title_label)
     plt.grid(True)
-    plt.xticks(np.arange(1, 6), [word.upper() for word in method_list])  # Adjust labels accordingly
-    plt.savefig(f'{metric}.png', dpi=600)
+    method_labels = ['SRS', 'BO-PU', 'BO-ILCB', 'BO-EI', 'BO-SEI']
+    plt.xticks(np.arange(1, 6), method_labels)  # Adjust labels accordingly
+    plt.savefig(f'{metric}.pdf', format='pdf', bbox_inches='tight')
     #plt.show()

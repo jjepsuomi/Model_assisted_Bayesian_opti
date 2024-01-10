@@ -11,3 +11,7 @@ total_de_difference.png
 y_mean_difference.png
 KLD.png
 new_data/*
+kld.pdf
+population_mean_difference.pdf
+total_difference_unnormalized.pdf
+total_difference_normalized.pdf
