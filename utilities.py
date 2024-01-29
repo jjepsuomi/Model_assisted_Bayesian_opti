@@ -54,22 +54,8 @@ def calculate_histogram_distances(data_sources=None, num_of_bins=30):
 
     # Plot densities using bar plot
     for i, density in enumerate(densities):
-        #if i == 0:  # Reference data
-        #    label = f'{legend_labels[i]}'
-        #    plt.bar(bins[:-1], density, width=bins[1] - bins[0], alpha=0.5, label=label)
-        #else:
         kl_divergence_vs_ref = round(kl_divergence(densities[0], density), 2)
         KL_divergence.append(kl_divergence_vs_ref)
-        #label = f'{legend_labels[i]}, KL: {kl_divergence_vs_ref}'
-        #plt.bar(bins[:-1], density, width=bins[1] - bins[0], alpha=0.5, label=label)
-
-    #plt.legend()
-    #plt.xlabel('Value')
-    #plt.ylabel('Density')
-    #plt.title('Density Histograms and KL Divergence for Data Sets')
-    #plt.grid(True)
-    #plt.show()
-
     return bins, densities, KL_divergence
 
 

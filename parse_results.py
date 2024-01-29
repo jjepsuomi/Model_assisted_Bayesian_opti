@@ -15,7 +15,7 @@ print(f'Searching data from location: {data_source_directory}')
 os.chdir(data_source_directory)
 data_files = glob.glob('./analysis_results/*/results/*.joblib')
 #data_files = glob.glob('./newest_data/*/results/*.joblib')
-#data_files = data_files[0:100]
+
 
 file_count = len(data_files)
 method_list = ['srs', 'pu', 'ilcb', 'ei', 'sei']

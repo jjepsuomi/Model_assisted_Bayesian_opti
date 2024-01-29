@@ -3,7 +3,6 @@ script_name="sampling.sh"
 job_name="sample_job"
 analysis_directory_root_path="./sampling_analysis/"
 analysis_code_path="./"
-#run_environment_path="export PATH=\"/scratch/project_2005231/Jonnes_analysis_2023/maatu_env/bin:\$PATH\""
 mkdir $analysis_directory_root_path
 mkdir $analysis_directory_root_path"logs/"
 results_path=$analysis_directory_root_path"results/"
@@ -23,7 +22,7 @@ time_limit="1-00:00:00"
 mem_per_task="8G"
 cores_per_task=1 # How many cores per task
 number_of_parallel_jobs=10 # This means that 10 CPU cores will perform separate 10 parallel analyses.
-csc_project_id=2004015
+csc_project_id=123
 
 
 

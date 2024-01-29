@@ -12,21 +12,8 @@ import sys, getopt
 from joblib import Parallel, delayed, dump, load
 import time
 
-"""
-# STEP 1 : Generate a synthetic data set and true function.
-print(f'***************************\nStarting analysis\n***************************')
-input_x_interval_min = -20
-input_x_interval_max = 20
-number_y_points_from_true_function = 200
-print(f'Generating true function {number_y_points_from_true_function} points from x-interval: [{input_x_interval_min}, {input_x_interval_max}]')
-x = np.linspace(input_x_interval_min, input_x_interval_max, number_y_points_from_true_function)
-y = true_function(x)
-print(f'Shape of x is: {x.shape}')
-print(f'Shape of y is: {y.shape}')
-x, y = check_2d_format(x), check_2d_format(y)
-print(f'New shape of x is: {x.shape}')
-print(f'New shape of y is: {y.shape}')
-"""
+
+
 
 print(f'Starting sampling analysis...')
 
