@@ -18,3 +18,4 @@ population_mean_difference.pdf
 total_difference_unnormalized.pdf
 total_difference_normalized.pdf
 __pycache__/*
+data_set.csv
