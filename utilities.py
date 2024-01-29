@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import entropy
 import math 
 
+
 def fd_optimal_bins(data: np.array) -> int:
     """ The Freedman-Diaconis rule for optimal bin selection
     Parameters: 
@@ -97,6 +98,9 @@ def true_function(input_x=0):
     - 0.5*gaussian(-15,1,input_x) \
     + np.cos(input_x*2)
     return true_function_values
+
+
+
 
 
 if __name__ == "__main__":

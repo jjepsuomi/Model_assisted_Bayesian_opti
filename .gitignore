@@ -11,7 +11,10 @@ total_de_difference.png
 y_mean_difference.png
 KLD.png
 new_data/*
+data/*/*
+data/*
 kld.pdf
 population_mean_difference.pdf
 total_difference_unnormalized.pdf
 total_difference_normalized.pdf
+__pycache__/*

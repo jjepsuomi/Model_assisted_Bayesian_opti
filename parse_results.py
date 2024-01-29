@@ -5,9 +5,11 @@ import glob
 import matplotlib.pyplot as plt
 import time
 import os
+from scipy.stats import mannwhitneyu
 
-project_folder = os.getcwd()
-data_source_directory = os.getcwd()
+
+#project_folder = os.getcwd()
+#data_source_directory = os.getcwd()
 #data_source_directory = "G:\\"
 
 print(f'Project code folder at: {project_folder}')
@@ -15,7 +17,7 @@ print(f'Searching data from location: {data_source_directory}')
 os.chdir(data_source_directory)
 data_files = glob.glob('./analysis_results/*/results/*.joblib')
 #data_files = glob.glob('./newest_data/*/results/*.joblib')
-
+#data_files = data_files[0:100]
 
 file_count = len(data_files)
 method_list = ['srs', 'pu', 'ilcb', 'ei', 'sei']
@@ -72,8 +74,39 @@ for metric in plot_data.keys():
     plot_data[metric] = plot_data[metric][~rows_with_nan]
     #plot_data[metric] = plot_data[metric] / float(plot_data[metric].shape[0])
 
-print(f'Changing folder back to project folder...')
-os.chdir(project_folder)
+benchmark_method = 'srs'
+comparison_methods = ['pu', 'ilcb', 'ei', 'sei']
+# Next, perform statistical analyses using Wilcoxon rank-sum test against SRS:
+p_tests = {}
+p_tests['less'] = None
+p_tests['greater'] = None
+p_tests['two-sided'] = None
+
+for p_test in p_tests.keys():
+    pvals = np.zeros(shape=(3,4))
+    row_names = []
+    for metric_idx, metric in enumerate(plot_data.keys()):
+        row_names.append(metric)
+        col_names = []
+        for method_idx, comparison_method in enumerate(comparison_methods):
+            col_names.append(comparison_method)
+            comparison_set = result_holder[comparison_method][metric]
+            benchmark_set = result_holder[benchmark_method][metric]
+            stat, p = mannwhitneyu(comparison_set, benchmark_set, alternative=p_test, nan_policy='omit')
+            pvals[metric_idx, method_idx] = p[0]
+    p_tests[p_test] = pvals
+    # Save the NumPy array to a CSV file
+    
+    df = pd.DataFrame(pvals, index=row_names, columns=col_names)
+    # Save the DataFrame to a CSV file
+    df.to_csv(f'mannwhitneyu_{p_test}_dataframe.csv')
+    np.savetxt(f'mannwhitneyu_{p_test}.csv', pvals, delimiter=',')
+
+
+
+
+#print(f'Changing folder back to project folder...')
+#os.chdir(project_folder)
 # Create boxplot
 for metric in plot_data.keys():
     title_label = ''
